@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Prokopē">
+<meta name="theme-color" content="#221A20">
+<title>ΠΡΟΚΟΠΗ — the nightly ledger</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="apple-touch-icon.png">
+<!-- the same icon inline, so a lone saved file still has one -->
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAMAAAAKE/YAAAAAYFBMVEXgw5LavY/ZvY7Xu43UuIvOs4jOsofNsofLsIbKsIXKr4XJroSfiWuIdV6DcFtnV0pBNTQoHyUnHSQmHSQmHSMlHCMlGyIkGyIjGyIfFh8cFB0bEx0aEhwYEBsXEBoUDBi+hcUpAAACZklEQVR42u3bb4+iMBDHcbTtWSjyx5OTVoX3/y4XXQX27oFkmfS83Pf3cDJhPyEbWpOZZPcPJgENGjRo0KBBgwYNGjRo0KBBgwYNGjRo0KBBgwYNGjRo0KBB27giK4LWZmeiZWe0ANrqfRU1e20F0FXvI6arrZFA+0MTLT99lYmgw/EULY0M2lS+PkRL3VZOAK3K/nKNlktfGYFPnnFF1DiBr8eg3sbM5rV50YmYuohJrdDdQysdKUpL3T10Hu88zLXMm7bbsg/nKAl9JYVW5bk+RkntBdGXSGfi8fzfow/t7NG/xuvN12vDmG83H4Icuuja2as++uDDLT6cZpImhEfVf7u57Usl9J3+YfK8bp9/sq33+TNlaEZFOVbXNL++TC89XGySn8cXcuj2iVa36E01locr5WdR6VXNqdiv8eF4mT36Wihnb8nMdNUeHG53r7pVzYJo9eXR+236x++D6fIu0QwaNGjQoEGDBg0aNGjQoEGDBg0aNGjQoEGDBg0aNGjQoEGDBg0a9PujbZY6nV9mk0aFctkt7rcJH/tZXdecZhKjyGazVUk+jnSdmpAn6j7qrJJpyvAYqs32UV3XvNGr0da4ohxS+2kQrbxXhhTlWB1e3rO6tvn1qPpL9GMlYDan2F67xwB/F5rZ2kQ3Dvavab4sGOxdgA635Yv5yOW0KzEfxWym8prm2lerty8iTseO/++gQYMG/ffQIeKSnMx3Oo27JHeVORFjL8ktWZNbdMuLvCYn8SMgixqZ+/QbBjRo0KBBgwYNGjRo0KBBgwYNGjRo0KBBgwYNGjRo0KBBgwb9hvkAuuby3hy6FmkAAAAASUVORK5CYII=">
+<style>
+:root{
+  --porphyry:#221A20;
+  --porphyry-2:#2B222A;
+  --porphyry-3:#342933;
+  --rule:#453644;
+  --sand:#CBB287;
+  --sand-deep:#BB9F6F;
+  --sand-rule:#A98C5F;
+  --ink:#EDE6DA;
+  --dim:#A2939C;
+  --bronze:#B4894E;
+  --bronze-lo:#8E6B34;
+  --verdigris:#4E8375;
+  --tyrian:#8A3660;
+
+  --t0:#C2AA83; --t1:#B39258; --t2:#9E7940; --t3:#86602D; --t4:#6B4820; --t5:#7C2E52;
+
+  --disp:Optima,"Optima Nova","Iowan Old Style",Palatino,"Palatino Linotype",Baskerville,Georgia,serif;
+  --body:-apple-system,BlinkMacSystemFont,"Helvetica Neue","Hiragino Sans",Helvetica,Arial,sans-serif;
+  --mono:Menlo,"SF Mono",ui-monospace,"Courier New",monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--porphyry);
+  background-image:radial-gradient(115% 60% at 50% -8%, #33262F 0%, rgba(51,38,47,0) 62%);
+  color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;
+  padding:0 0 env(safe-area-inset-bottom);-webkit-text-size-adjust:100%;
+}
+.wrap{max-width:580px;margin:0 auto;padding:0 18px 72px;position:relative;z-index:1}
+:focus-visible{outline:2px solid var(--bronze);outline-offset:2px}
+
+/* ── ambient: the aura and the shadow ───── */
+.aura{
+  position:fixed;left:50%;top:-16%;width:min(160vw,940px);height:min(160vw,940px);
+  transform:translateX(-50%);pointer-events:none;z-index:0;
+  background:radial-gradient(closest-side, rgba(214,170,92,.17), rgba(214,170,92,.055) 44%, rgba(214,170,92,0) 71%);
+  animation:breathe 9s ease-in-out infinite alternate;
+}
+@keyframes breathe{
+  from{opacity:.5;transform:translateX(-50%) scale(.93)}
+  to{opacity:1;transform:translateX(-50%) scale(1.07)}
+}
+.shade{
+  position:fixed;right:-13%;top:5%;width:min(84vw,440px);height:auto;
+  pointer-events:none;z-index:0;
+}
+.aura.low{
+  left:16%;top:auto;bottom:-34%;width:min(128vw,760px);height:min(128vw,760px);
+  transform:none;
+  background:radial-gradient(closest-side, rgba(198,148,82,.14), rgba(198,148,82,.045) 46%, rgba(198,148,82,0) 72%);
+  animation:breathe-low 15s ease-in-out infinite alternate;
+}
+@keyframes breathe-low{
+  from{opacity:.42;transform:scale(.9)}
+  to{opacity:.92;transform:scale(1.08)}
+}
+.motes{position:fixed;left:0;right:0;top:0;bottom:0;overflow:hidden;pointer-events:none;z-index:0}
+.mote{position:absolute;bottom:-8vh;animation-name:rise;animation-timing-function:linear;animation-iteration-count:infinite}
+.mote i{
+  display:block;border-radius:50%;
+  background:radial-gradient(circle, rgba(242,212,150,.95) 0%, rgba(214,170,92,.34) 52%, rgba(214,170,92,0) 100%);
+  animation-name:sway;animation-timing-function:ease-in-out;animation-iteration-count:infinite;animation-direction:alternate;
+}
+@keyframes rise{
+  0%{transform:translateY(0);opacity:0}
+  9%{opacity:1}
+  84%{opacity:.5}
+  100%{transform:translateY(-118vh);opacity:0}
+}
+@keyframes sway{from{transform:translateX(-11px)}to{transform:translateX(11px)}}
+
+.slab{position:relative;overflow:hidden}
+.slab::after{
+  content:"";position:absolute;top:-60%;bottom:-60%;width:38%;left:-45%;pointer-events:none;
+  background:linear-gradient(105deg, rgba(255,247,228,0) 0%, rgba(255,247,228,.30) 50%, rgba(255,247,228,0) 100%);
+  transform:rotate(9deg);animation:pass 21s ease-in-out infinite;
+}
+@keyframes pass{
+  0%{left:-45%}
+  55%{left:112%}
+  100%{left:112%}
+}
+
+/* ── masthead ───────────────────────────── */
+.mast{padding:30px 0 0;text-align:center}
+.mast h1{
+  margin:0;font-family:var(--disp);font-weight:400;font-size:clamp(30px,9vw,44px);
+  letter-spacing:.24em;text-indent:.24em;color:var(--bronze);line-height:1;
+  text-shadow:0 0 20px rgba(203,157,80,.22);
+  animation:lamp 9s ease-in-out infinite alternate;
+}
+@keyframes lamp{
+  from{text-shadow:0 0 12px rgba(203,157,80,.10)}
+  to{text-shadow:0 0 32px rgba(214,170,92,.44)}
+}
+.mast .rom{
+  font-family:var(--disp);font-size:11px;letter-spacing:.3em;text-indent:.3em;
+  text-transform:uppercase;color:var(--dim);margin-top:11px;
+}
+.gloss{font-family:var(--disp);font-size:13.5px;line-height:1.6;color:var(--dim);margin:9px auto 0;max-width:34ch;font-style:italic}
+
+/* hero: the counsel */
+.counsel{
+  margin:26px 0 0;padding:22px 4px 24px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+  text-align:center;position:relative;
+}
+.counsel::before,.counsel::after{
+  content:"";position:absolute;left:0;right:0;height:1px;pointer-events:none;
+  background-image:linear-gradient(90deg, rgba(226,183,106,0), rgba(232,196,124,.9), rgba(226,183,106,0));
+  background-size:34% 100%;background-repeat:no-repeat;
+  animation:sweep 13s linear infinite;
+}
+.counsel::before{top:-1px}
+.counsel::after{bottom:-1px;animation-direction:reverse;animation-duration:17s}
+@keyframes sweep{from{background-position:-36% 0}to{background-position:136% 0}}
+.counsel p{
+  margin:0;font-family:var(--disp);font-size:clamp(18px,5.2vw,23px);line-height:1.42;color:var(--ink);
+}
+.counsel .attr{
+  display:block;margin-top:13px;font-family:var(--disp);font-size:9.5px;letter-spacing:.26em;
+  text-transform:uppercase;color:var(--bronze-lo);
+}
+
+.datebar{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-top:16px}
+.datebar .d{font-family:var(--disp);font-size:17px;letter-spacing:.03em}
+.datebar .d em{font-style:normal;color:var(--bronze)}
+.datebar .cd{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right;line-height:1.6}
+.datebar .cd b{color:var(--ink);font-weight:400}
+
+/* ── nav ────────────────────────────────── */
+nav{display:flex;margin:16px 0 0;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
+nav button{
+  flex:1;appearance:none;border:0;border-right:1px solid var(--rule);background:transparent;color:var(--dim);
+  font-family:var(--disp);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+  padding:14px 4px;min-height:46px;cursor:pointer;
+}
+nav button:last-child{border-right:0}
+nav button.sel{background:var(--porphyry-3);color:var(--bronze)}
+
+/* ── panels ─────────────────────────────── */
+.view{display:none}
+.view.on{display:block;animation:rise .3s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+.panel{background:rgba(43,34,42,.93);border:1px solid var(--rule);border-radius:3px;padding:20px 17px;margin-top:16px}
+.panel > h2{margin:0;font-family:var(--disp);font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--bronze);font-weight:400}
+.panel > h2 small{display:block;font-family:var(--disp);font-size:19px;letter-spacing:.02em;text-transform:none;color:var(--ink);margin-top:6px}
+.say{font-size:13px;line-height:1.65;color:var(--dim);margin:12px 0 0}
+
+/* ── set for today ──────────────────────── */
+.setline{margin-top:16px}
+.setline input{
+  width:100%;background:var(--porphyry);border:1px solid var(--rule);border-radius:2px;color:var(--ink);
+  font-family:var(--disp);font-size:16.5px;padding:13px 12px;min-height:48px;
+}
+
+/* ── the count ──────────────────────────── */
+.tally{margin:22px 0 0;display:flex;align-items:flex-end;justify-content:space-between;gap:14px}
+.tally .big{font-family:var(--mono);font-size:36px;color:var(--bronze);line-height:.95;letter-spacing:-.03em}
+.tally .big i{font-style:normal;color:var(--dim);font-size:19px}
+.tally .pct{font-family:var(--mono);font-size:13px;color:var(--dim);padding-bottom:4px}
+.lbl{font-family:var(--disp);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-top:9px}
+.gauge{height:3px;background:var(--rule);margin-top:13px;position:relative;overflow:hidden}
+.gauge i{position:absolute;top:0;bottom:0;left:0;width:0;background:var(--bronze);transition:width .5s ease}
+.gauge.full i{background:var(--tyrian)}
+
+.rows{margin-top:22px;border-top:1px solid var(--rule)}
+.row{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--rule);padding:9px 0}
+.row label{flex:1;font-size:14.5px}
+.row label b{display:block;font-family:var(--disp);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);font-weight:400;margin-top:2px}
+.row input[type=number]{
+  width:92px;text-align:right;background:var(--porphyry);color:var(--bronze);border:1px solid var(--rule);
+  border-radius:2px;padding:12px 10px;font-family:var(--mono);font-size:16px;min-height:46px;appearance:none;
+}
+.row .unit{font-family:var(--mono);font-size:12px;color:var(--dim);width:16px}
+.row input::-webkit-outer-spin-button,.row input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+textarea{
+  width:100%;background:var(--porphyry);color:var(--ink);border:1px solid var(--rule);border-radius:2px;
+  padding:13px;font-family:var(--body);font-size:15.5px;line-height:1.66;resize:vertical;min-height:88px;
+}
+textarea.tall{min-height:230px;line-height:1.72}
+.flbl{font-family:var(--disp);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin:20px 0 8px}
+
+/* ── examination ────────────────────────── */
+.q{margin-top:22px}
+.q .head{display:flex;align-items:baseline;gap:11px}
+.q .num{font-family:var(--disp);font-size:13px;letter-spacing:.1em;color:var(--tyrian);flex:none;width:22px}
+.q .ask{font-family:var(--disp);font-size:18.5px;line-height:1.35}
+.q textarea{margin-top:9px}
+.q .hint{font-size:12px;color:var(--dim);margin:6px 0 0;line-height:1.55}
+.sealbar{display:flex;align-items:center;gap:9px;margin-top:22px;padding-top:15px;border-top:1px solid var(--rule);
+  font-family:var(--disp);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+.seal{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--rule);flex:none}
+.sealbar.done{color:var(--ink)}
+.sealbar.done .seal{background:var(--tyrian);border-color:var(--tyrian)}
+
+/* ── the four ───────────────────────────── */
+.vir{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--rule)}
+.vir:first-of-type{border-top:1px solid var(--rule)}
+.vir .nm{flex:1}
+.vir .nm b{display:block;font-size:15px;font-weight:400}
+.vir .nm span{display:block;font-family:var(--disp);font-size:10px;letter-spacing:.19em;color:var(--dim);margin-top:2px}
+.pips{display:flex;gap:6px;flex:none}
+.pips button{
+  appearance:none;width:32px;height:44px;border:0;background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0;
+}
+.pips button i{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--rule);display:block;transition:.2s ease}
+.pips button.lit i{background:var(--bronze);border-color:var(--bronze)}
+.pips button.lit.top i{background:var(--verdigris);border-color:var(--verdigris)}
+.scalecap{display:flex;justify-content:flex-end;gap:14px;font-family:var(--disp);font-size:9.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dim);margin-top:11px}
+
+/* ── mosaic ─────────────────────────────── */
+.slab{background:var(--sand);border-radius:2px;padding:17px 15px 19px;color:#413018;
+  background-image:linear-gradient(148deg, rgba(255,246,224,.30) 0%, rgba(255,246,224,0) 40%),
+                   linear-gradient(28deg, rgba(122,96,54,.20) 0%, rgba(122,96,54,0) 48%)}
+.mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}
+.mhead .m{font-family:var(--disp);font-size:13px;letter-spacing:.22em;text-transform:uppercase}
+.mhead button{appearance:none;background:transparent;border:1px solid var(--sand-rule);color:#43331C;
+  width:42px;height:38px;border-radius:2px;font-size:16px;cursor:pointer;line-height:1}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px}
+.dow span{font-family:var(--disp);font-size:9px;letter-spacing:.1em;text-align:center;color:#7A6440}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.tess{
+  position:relative;aspect-ratio:1/1;min-height:38px;border-radius:1px;background:var(--t0);
+  box-shadow:inset 0 0 0 1px rgba(94,72,38,.30);display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:11px;color:#4A3820;cursor:pointer;
+  animation:set .32s ease both;
+}
+@keyframes set{from{opacity:0;transform:scale(.86)}to{opacity:1;transform:none}}
+.tess.pad{background:transparent;box-shadow:none;cursor:default}
+.tess.l1{background:var(--t1)}
+.tess.l2{background:var(--t2);color:#F6EDD8}
+.tess.l3{background:var(--t3);color:#F6EDD8}
+.tess.l4{background:var(--t4);color:#F6EDD8}
+.tess.l5{background:var(--t5);color:#F7E4EA}
+.tess.now{box-shadow:inset 0 0 0 2px var(--bronze)}
+.tess.pick{box-shadow:inset 0 0 0 2px var(--tyrian)}
+.tess .ex{position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:var(--verdigris)}
+.key{display:flex;margin-top:15px;border-top:1px solid var(--sand-rule);padding-top:12px}
+.key div{flex:1;text-align:center}
+.key div i{display:block;height:10px;box-shadow:inset 0 0 0 1px rgba(94,72,38,.34)}
+.key div span{display:block;font-family:var(--disp);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:#7A6440;margin-top:5px}
+.keycap{font-family:var(--disp);font-size:10px;letter-spacing:.13em;color:#6B5430;margin-top:11px;text-align:center;line-height:1.6}
+
+/* ── figures ────────────────────────────── */
+.figs{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:18px}
+.fig{background:var(--porphyry-2);padding:15px 13px}
+.fig b{display:block;font-family:var(--mono);font-size:23px;color:var(--bronze);font-weight:400;line-height:1.05}
+.fig span{display:block;font-family:var(--disp);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-top:6px}
+
+.spark{display:flex;align-items:flex-end;gap:2px;height:64px;margin-top:16px}
+.spark div{flex:1;background:var(--rule);border-radius:1px;position:relative;min-height:2px}
+.spark div i{position:absolute;left:0;right:0;bottom:0;background:var(--bronze-lo);border-radius:1px}
+.sparkcap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:8px}
+
+.vbar{display:flex;align-items:center;gap:11px;margin-top:11px}
+.vbar .n{width:96px;font-size:13.5px}
+.vbar .t{flex:1;height:6px;background:var(--rule);border-radius:1px;overflow:hidden}
+.vbar .t i{display:block;height:100%;background:var(--verdigris);width:0;transition:width .5s ease}
+.vbar .v{font-family:var(--mono);font-size:11px;color:var(--dim);width:30px;text-align:right}
+.counsel-note{margin-top:17px;border-left:2px solid var(--tyrian);padding:9px 0 9px 13px;font-size:13.5px;line-height:1.6}
+
+/* ── record ─────────────────────────────── */
+.entry{border-bottom:1px solid var(--rule);padding:17px 0}
+.entry .eh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.entry .ed{font-family:var(--disp);font-size:15px;letter-spacing:.04em}
+.entry .en{font-family:var(--mono);font-size:10.5px;color:var(--dim);text-align:right}
+.entry .aim{font-family:var(--disp);font-style:italic;font-size:14px;color:var(--bronze);margin-top:7px}
+.entry dt{font-family:var(--disp);font-size:9.5px;letter-spacing:.19em;text-transform:uppercase;color:var(--tyrian);margin-top:12px}
+.entry dt.alt{color:var(--bronze)}
+.entry dt.jr{color:var(--verdigris)}
+.entry dd{margin:4px 0 0;font-size:14.5px;line-height:1.62;white-space:pre-wrap}
+.entry dl{margin:0}
+.empty{font-size:14px;color:var(--dim);line-height:1.75;margin-top:14px}
+
+.btn{appearance:none;background:transparent;border:1px solid var(--rule);color:var(--ink);font-family:var(--disp);
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;padding:13px 15px;border-radius:2px;cursor:pointer;min-height:46px}
+.btn.danger{border-color:var(--tyrian);color:#D48AA8}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.iobox{width:100%;min-height:100px;font-family:var(--mono);font-size:11px;line-height:1.5;margin-top:13px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,18px);opacity:0;pointer-events:none;
+  background:var(--sand);color:#33261A;font-family:var(--disp);font-size:11px;letter-spacing:.15em;
+  text-transform:uppercase;padding:12px 20px;border-radius:2px;transition:.26s ease;z-index:9}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+footer{margin-top:30px;text-align:center;font-family:var(--disp);font-size:10px;letter-spacing:.17em;
+  text-transform:uppercase;color:#6F5F6A;line-height:2}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .tess{opacity:1!important;transform:none!important}
+  .view.on{opacity:1!important}
+  .aura{opacity:.8;transform:translateX(-50%)}
+  .aura.low{opacity:.6;transform:none}
+  .motes{display:none}
+  .slab::after{display:none}
+  .counsel::before,.counsel::after{background-position:50% 0}
+}
+</style>
+</head>
+<body>
+
+<div class="aura" aria-hidden="true"></div>
+<div class="aura low" aria-hidden="true"></div>
+<div class="motes" id="motes" aria-hidden="true"></div>
+
+<svg class="shade" viewBox="0 0 400 560" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMin meet">
+  <defs>
+    <linearGradient id="shadeFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#D8B279" stop-opacity=".17"/>
+      <stop offset=".42"  stop-color="#C79E63" stop-opacity=".085"/>
+      <stop offset=".78"  stop-color="#B98F55" stop-opacity=".025"/>
+      <stop offset="1"    stop-color="#B98F55" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#shadeFade)" d="M214,22
+    C246,20 276,34 294,58 C310,78 322,88 330,104
+    C346,140 356,182 353,226 C350,268 340,304 326,336
+    C318,354 312,372 314,392 C342,412 368,444 381,484
+    C390,510 394,532 395,560 L13,560
+    C15,522 28,482 50,452 C72,424 100,404 128,394
+    C146,387 155,376 155,359 C155,350 153,344 149,337
+    C138,349 120,350 107,340 C93,329 82,314 81,297
+    C80,282 85,266 95,252 C89,246 85,239 87,232
+    C81,227 75,221 77,214 C85,201 97,189 105,175
+    C110,166 110,158 112,150 C114,130 120,110 133,93
+    C143,80 152,84 159,74 C165,65 173,69 180,60
+    C187,51 196,54 204,44 C209,38 212,30 214,22 Z"/>
+</svg>
+
+<div class="wrap">
+
+  <header class="mast">
+    <h1>ΠΡΟΚΟΠΗ</h1>
+    <div class="rom">Prokopē</div>
+    <p class="gloss">The Stoic word for the progress a person is making toward becoming good. Not arrival. Progress.</p>
+  </header>
+
+  <div class="counsel">
+    <p id="counselText">—</p>
+    <span class="attr">Counsel for the day</span>
+  </div>
+
+  <div class="datebar">
+    <div class="d" id="dLabel">—</div>
+    <div class="cd" id="dCount"></div>
+  </div>
+
+  <nav id="nav">
+    <button type="button" class="sel" data-v="tonight">Tonight</button>
+    <button type="button" data-v="cal">Calendar</button>
+    <button type="button" data-v="rec">Record</button>
+  </nav>
+
+  <!-- ════ TONIGHT ════ -->
+  <div class="view on" id="v-tonight">
+
+    <section class="panel">
+      <h2>I<small>Set for today</small></h2>
+      <p class="say">One thing that must be done before you sleep. Written in the morning if you can — question III will ask after it tonight.</p>
+      <div class="setline"><input type="text" id="f_aim" data-f="aim" placeholder="Today I will…"></div>
+    </section>
+
+    <section class="panel">
+      <h2>II<small>The count</small></h2>
+
+      <div class="tally">
+        <div>
+          <div class="big"><span id="tRev">0</span><i> / <span id="tDue">0</span></i></div>
+          <div class="lbl">Reviews cleared</div>
+        </div>
+        <div class="pct" id="tPct"></div>
+      </div>
+      <div class="gauge" id="gauge"><i></i></div>
+
+      <div class="rows">
+        <div class="row"><label for="f_due">Due today<b>The queue</b></label><input type="number" id="f_due" inputmode="numeric" min="0" data-f="due"><span class="unit"></span></div>
+        <div class="row"><label for="f_rev">Reviewed<b>Cards answered</b></label><input type="number" id="f_rev" inputmode="numeric" min="0" data-f="rev"><span class="unit"></span></div>
+        <div class="row"><label for="f_nw">New cards learned<b>First sight</b></label><input type="number" id="f_nw" inputmode="numeric" min="0" data-f="nw"><span class="unit"></span></div>
+        <div class="row"><label for="f_acc">Answered correctly<b>Retention</b></label><input type="number" id="f_acc" inputmode="numeric" min="0" max="100" data-f="acc"><span class="unit">%</span></div>
+        <div class="row"><label for="f_min">Time at the deck<b>Minutes</b></label><input type="number" id="f_min" inputmode="numeric" min="0" data-f="min"><span class="unit">m</span></div>
+      </div>
+
+      <div class="flbl">What else did I learn?</div>
+      <textarea id="f_extra" data-f="extra" placeholder="A grammar point. A shadowing session. A word caught on the street, off a sign, from a customer."></textarea>
+      <p class="say">The deck is not the only teacher and its numbers do not know this part. Write it here anyway — most of what you will actually use came in sideways.</p>
+
+      <div class="flbl">Cards that keep beating me</div>
+      <textarea id="f_leech" data-f="leech" placeholder="Leeches, confusable pairs, readings that will not stick."></textarea>
+      <p class="say">Due, correct % and minutes are all on Anki's own Stats screen.</p>
+    </section>
+
+    <section class="panel">
+      <h2>III<small>The examination</small></h2>
+      <p class="say">Sextius put three questions to himself every night before he would let himself sleep, and Seneca kept the habit. His one rule was that the judge be strict but never cruel — you are examining the day, not sentencing yourself.</p>
+
+      <div class="q">
+        <div class="head"><span class="num">I</span><span class="ask">What did I do wrong?</span></div>
+        <textarea id="f_wrong" data-f="wrong" placeholder="The failing itself, with the excuse left off."></textarea>
+      </div>
+      <div class="q">
+        <div class="head"><span class="num">II</span><span class="ask">What did I do right?</span></div>
+        <textarea id="f_right" data-f="right" placeholder="What you chose well — not merely what went well."></textarea>
+      </div>
+      <div class="q">
+        <div class="head"><span class="num">III</span><span class="ask">What duty was left undone?</span></div>
+        <textarea id="f_undone" data-f="undone" placeholder="What was yours to do and is still waiting."></textarea>
+      </div>
+
+      <div class="sealbar" id="sealbar"><i class="seal"></i><span id="sealTxt">Not yet examined</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>IV<small>The four virtues</small></h2>
+      <p class="say">The Stoics held that everything good in a person comes down to four things. Mark how each stood today. Untouched is a fair answer — some days do not test courage.</p>
+      <div id="virBox"></div>
+      <div class="scalecap"><span>Fell short</span><span>Held</span><span>Well kept</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>V<small>The journal</small></h2>
+      <p class="say">Marcus' book carried no title. What later editors called the <em>Meditations</em> he headed only <em>to himself</em> — it was never written to be read. Use this the same way. Whatever the day left in you, at whatever length, in whatever language it arrives in.</p>
+      <textarea id="f_jrnl" data-f="jrnl" class="tall" placeholder="No one else is going to read this."></textarea>
+    </section>
+
+  </div>
+
+  <!-- ════ CALENDAR ════ -->
+  <div class="view" id="v-cal">
+    <section class="panel" style="padding:15px 13px">
+      <div class="slab">
+        <div class="mhead">
+          <button type="button" id="mPrev" aria-label="Previous month">‹</button>
+          <div class="m" id="mLabel">—</div>
+          <button type="button" id="mNext" aria-label="Next month">›</button>
+        </div>
+        <div class="dow"><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span></div>
+        <div class="grid" id="grid"></div>
+        <div class="key">
+          <div><i style="background:var(--t0)"></i><span>none</span></div>
+          <div><i style="background:var(--t1)"></i><span>a start</span></div>
+          <div><i style="background:var(--t2)"></i><span>half</span></div>
+          <div><i style="background:var(--t3)"></i><span>most</span></div>
+          <div><i style="background:var(--t4)"></i><span>nearly</span></div>
+          <div><i style="background:var(--t5)"></i><span>cleared</span></div>
+        </div>
+        <div class="keycap">A month is laid one tessera at a time. Days that clear the whole queue are set in Tyrian purple; a green mark means the day was examined.</div>
+      </div>
+      <p class="say" style="padding:0 4px">Tap any tessera to open that day's ledger.</p>
+    </section>
+
+    <section class="panel">
+      <h2>VI<small>What the record shows</small></h2>
+      <div class="figs">
+        <div class="fig"><b id="s_streak">0</b><span>Day streak</span></div>
+        <div class="fig"><b id="s_exam">0</b><span>Nights examined</span></div>
+        <div class="fig"><b id="s_rev30">0</b><span>Reviews · 30 days</span></div>
+        <div class="fig"><b id="s_new30">0</b><span>New cards · 30 days</span></div>
+        <div class="fig"><b id="s_acc">—</b><span>Avg correct · 30 days</span></div>
+        <div class="fig"><b id="s_hrs">0</b><span>Hours · 30 days</span></div>
+      </div>
+
+      <div class="flbl" style="margin-bottom:2px">Reviews against queue · 30 days</div>
+      <div class="spark" id="spark"></div>
+      <div class="sparkcap"><span id="sparkA">—</span><span>tonight</span></div>
+
+      <div class="flbl">The four · 30 days</div>
+      <div id="vProfile"></div>
+      <div id="noteBox"></div>
+    </section>
+  </div>
+
+  <!-- ════ RECORD ════ -->
+  <div class="view" id="v-rec">
+    <section class="panel">
+      <h2>VII<small>The record</small></h2>
+      <div id="recList"></div>
+    </section>
+
+    <section class="panel">
+      <h2>VIII<small>Keeping it safe</small></h2>
+      <p class="say">Everything is stored in this browser and nowhere else. Copy the backup text somewhere safe now and then — that is the whole ledger.</p>
+      <div class="btnrow">
+        <button type="button" class="btn" id="bExport">Show backup text</button>
+        <button type="button" class="btn" id="bOpenRestore">Restore from text</button>
+      </div>
+      <textarea class="iobox" id="ioBox" style="display:none"></textarea>
+      <div class="btnrow" id="restoreRow" style="display:none">
+        <button type="button" class="btn" id="bRestore">Replace ledger with this text</button>
+      </div>
+      <div class="btnrow"><button type="button" class="btn danger" id="bWipe">Erase everything</button></div>
+    </section>
+
+    <footer>Offline single file · add to Home Screen<br>ζῆν κατὰ φύσιν</footer>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ══ counsel ══ */
+var COUNSEL = [
+"Of everything today, one part was yours: what you chose. Guard that part and let the rest arrive as it will.",
+"The fault you can name is already half undone.",
+"Do the small duty exactly. Nothing large was ever built by someone careless with the small.",
+"Judge the day by what you attempted, not by what obeyed you.",
+"Nobody wrongs you by holding a low opinion. The wound is in agreeing with it.",
+"Begin again. That is the whole method; there is no other.",
+"The cards you keep failing are not your enemy. They are the only honest report you have.",
+"Anger costs you more than the thing you are angry about.",
+"Be strict with yourself, and mild in how you say it.",
+"Nothing is tedious once you have decided it is yours to do.",
+"You will not always feel like it. Feeling like it was never the requirement.",
+"A good person is not one who never fails, but one who counts the failures at night and goes on.",
+"Practice is not the price of the skill. It is the skill, arriving slowly.",
+"Do not perform virtue for an audience. There is no audience.",
+"If a thing lies outside your choice, it cannot be good or bad for you. Only inconvenient.",
+"The mind takes the colour of whatever it is fed all day. Choose the diet.",
+"You have wanted to be this person for years. Be them for one evening and see.",
+"Waiting for the right conditions is how a life gets spent.",
+"Ask not why they acted so, but why it disturbs you.",
+"Say little. Then do the thing, and let that be the argument.",
+"Today is a rehearsal for nothing. This is the performance.",
+"Fear runs ahead and reports back exaggerations. Wait for the fact.",
+"Tired is a condition, not a verdict.",
+"Whatever you did badly today was done by someone who can still be taught.",
+"Two hundred cards are not reviewed by intention. Only by hands.",
+"Character is the sum of what you did at the hour it would have been easy not to.",
+"Envy, resentment, despair: every one of them is an opinion you are permitted to revise.",
+"You are not owed tomorrow's hour. Spend tonight's.",
+"Wanting to be better and being better are separated by one small unpleasant act, usually available right now.",
+"No one is ruined by another's fault, only by their own.",
+"Measure the day against yesterday's self. Every other comparison is borrowed trouble.",
+"What you do repeatedly, you are becoming. Look at the repetitions."
+];
+
+/* ══ storage ══ */
+var KEY = "keikoroku.v1", mem = null;
+function load(){ try{ var s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; }catch(e){ return mem; } }
+function persist(o){ mem = o; try{ localStorage.setItem(KEY, JSON.stringify(o)); }catch(e){} }
+
+var DB = load() || {};
+if(!DB.days || typeof DB.days !== "object") DB.days = {};
+if(!DB.exam) DB.exam = "2026-12-06";
+function save(){ persist(DB); }
+
+/* ══ dates ══ */
+function key(d){ var m=d.getMonth()+1, n=d.getDate(); return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(n<10?"0":"")+n; }
+function fromKey(k){ var p=k.split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+var TODAY = key(new Date()), sel = TODAY;
+var MON=["January","February","March","April","May","June","July","August","September","October","November","December"];
+var DOW=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+function ord(n){ var s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
+function num(v){ var n=parseInt(v,10); return isNaN(n)?0:n; }
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+var VIRTUES = [["w","Wisdom","Sophia","seeing what is actually the case"],
+               ["j","Justice","Dikaiosynē","giving people their due"],
+               ["c","Courage","Andreia","doing it while afraid"],
+               ["t","Temperance","Sōphrosynē","wanting less than you could take"]];
+
+function blank(){ return {aim:"",due:"",rev:"",nw:"",acc:"",min:"",extra:"",leech:"",wrong:"",right:"",undone:"",jrnl:"",vir:{}}; }
+function day(k){
+  if(!DB.days[k]) DB.days[k] = blank();
+  if(!DB.days[k].vir) DB.days[k].vir = {};
+  return DB.days[k];
+}
+function examined(d){ return !!(d && (String(d.wrong||"").trim() || String(d.right||"").trim() || String(d.undone||"").trim())); }
+function worked(d){ return !!(d && (num(d.rev) || num(d.nw))); }
+
+/* ══ elements ══ */
+function $(id){ return document.getElementById(id); }
+var fields = {};
+
+/* ══ render: header + counsel ══ */
+function drawCounsel(){
+  var d = fromKey(TODAY);
+  var doy = Math.floor((d - new Date(d.getFullYear(),0,0)) / 86400000);
+  $("counselText").textContent = COUNSEL[doy % COUNSEL.length];
+}
+function drawHead(){
+  var d = fromKey(sel);
+  $("dLabel").innerHTML = "<em>" + (sel === TODAY ? "Tonight" : DOW[d.getDay()]) + "</em> · " + ord(d.getDate()) + " " + MON[d.getMonth()];
+  var out = [];
+  if(sel !== TODAY) out.push("an earlier day");
+  var left = Math.round((fromKey(DB.exam) - fromKey(TODAY)) / 86400000);
+  if(left >= 0) out.push("<b>" + left + "</b> days to 6 Dec");
+  $("dCount").innerHTML = out.join("<br>");
+}
+
+/* ══ render: tonight ══ */
+function drawForm(){
+  var d = day(sel), k;
+  for(k in fields){ if(fields.hasOwnProperty(k)) fields[k].value = (d[k] === undefined ? "" : d[k]); }
+  drawTally(); drawSeal(); drawVir();
+}
+function drawTally(){
+  var d = day(sel), rev = num(d.rev), due = num(d.due);
+  $("tRev").textContent = rev; $("tDue").textContent = due;
+  var pct = due > 0 ? Math.round(rev/due*100) : (rev > 0 ? 100 : 0);
+  $("tPct").textContent = (due > 0 || rev > 0) ? pct + "%" : "";
+  var g = $("gauge");
+  g.className = "gauge" + (pct >= 100 && (due > 0 || rev > 0) ? " full" : "");
+  g.getElementsByTagName("i")[0].style.width = Math.min(100, pct) + "%";
+}
+function drawSeal(){
+  var d = day(sel), n = 0;
+  ["wrong","right","undone"].forEach(function(k){ if(String(d[k]||"").trim()) n++; });
+  $("sealbar").className = "sealbar" + (n === 3 ? " done" : "");
+  $("sealTxt").textContent = n === 3 ? "Examined and sealed" : (n === 0 ? "Not yet examined" : n + " of 3 answered");
+}
+function buildVir(){
+  var box = $("virBox"), html = "";
+  VIRTUES.forEach(function(v){
+    html += '<div class="vir"><div class="nm"><b>' + v[1] + '</b><span>' + v[2] + ' · ' + v[3] + '</span></div><div class="pips" data-v="' + v[0] + '">';
+    for(var i = 1; i <= 3; i++) html += '<button type="button" data-p="' + i + '" aria-label="' + v[1] + ' level ' + i + '"><i></i></button>';
+    html += "</div></div>";
+  });
+  box.innerHTML = html;
+  box.addEventListener("click", function(e){
+    var t = e.target;
+    while(t && t !== box && t.tagName !== "BUTTON") t = t.parentNode;
+    if(!t || t === box) return;
+    var lvl = +t.getAttribute("data-p"), v = t.parentNode.getAttribute("data-v"), d = day(sel);
+    d.vir[v] = (d.vir[v] === lvl) ? 0 : lvl;
+    save(); drawVir();
+  });
+}
+function drawVir(){
+  var d = day(sel);
+  var groups = $("virBox").getElementsByClassName("pips");
+  for(var i = 0; i < groups.length; i++){
+    var v = groups[i].getAttribute("data-v"), lvl = num(d.vir[v]);
+    var btns = groups[i].getElementsByTagName("button");
+    for(var j = 0; j < btns.length; j++){
+      var p = j + 1;
+      btns[j].className = (p <= lvl ? "lit" : "") + (p === 3 && lvl === 3 ? " top" : "");
+    }
+  }
+}
+
+/* ══ render: mosaic ══ */
+var cur = fromKey(TODAY); cur.setDate(1);
+function level(d){
+  var rev = num(d.rev), due = num(d.due);
+  if(!rev) return 0;
+  if(due > 0){
+    var r = rev/due;
+    if(r >= 1) return 5;
+    if(r >= .8) return 4;
+    if(r >= .55) return 3;
+    if(r >= .3) return 2;
+    return 1;
+  }
+  if(rev >= 200) return 4;
+  if(rev >= 120) return 3;
+  if(rev >= 50) return 2;
+  return 1;
+}
+function drawCal(){
+  $("mLabel").textContent = MON[cur.getMonth()] + " " + cur.getFullYear();
+  var g = $("grid"); g.innerHTML = "";
+  var lead = (new Date(cur.getFullYear(), cur.getMonth(), 1).getDay() + 6) % 7;
+  var len = new Date(cur.getFullYear(), cur.getMonth()+1, 0).getDate();
+  var i, c, n = 0;
+  for(i = 0; i < lead; i++){ c = document.createElement("div"); c.className = "tess pad"; g.appendChild(c); }
+  for(i = 1; i <= len; i++){
+    var k = key(new Date(cur.getFullYear(), cur.getMonth(), i));
+    var d = DB.days[k] || blank();
+    c = document.createElement("div");
+    c.className = "tess l" + level(d) + (k === TODAY ? " now" : "") + (k === sel && k !== TODAY ? " pick" : "");
+    c.style.animationDelay = (n++ * 9) + "ms";
+    c.setAttribute("data-k", k);
+    c.appendChild(document.createTextNode(i));
+    if(examined(d)){ var e = document.createElement("i"); e.className = "ex"; c.appendChild(e); }
+    g.appendChild(c);
+  }
+}
+
+/* ══ render: stats ══ */
+function window30(){
+  var out = [], b = fromKey(TODAY), i, d;
+  for(i = 29; i >= 0; i--){
+    d = new Date(b.getFullYear(), b.getMonth(), b.getDate()-i);
+    out.push({ k:key(d), d:DB.days[key(d)] || blank() });
+  }
+  return out;
+}
+function drawStats(){
+  var w = window30(), rev=0, nw=0, mins=0, accs=[], i, k;
+  w.forEach(function(x){
+    rev += num(x.d.rev); nw += num(x.d.nw); mins += num(x.d.min);
+    if(num(x.d.acc)) accs.push(num(x.d.acc));
+  });
+  $("s_rev30").textContent = rev;
+  $("s_new30").textContent = nw;
+  $("s_hrs").textContent = (mins/60).toFixed(1);
+  $("s_acc").textContent = accs.length ? Math.round(accs.reduce(function(a,b){return a+b;},0)/accs.length) + "%" : "—";
+
+  var streak = 0, b = fromKey(TODAY);
+  for(i = 0; i < 900; i++){
+    var kk = key(new Date(b.getFullYear(), b.getMonth(), b.getDate()-i));
+    if(worked(DB.days[kk])) streak++;
+    else if(i > 0) break;
+  }
+  $("s_streak").textContent = streak;
+
+  var ex = 0;
+  for(k in DB.days){ if(DB.days.hasOwnProperty(k) && examined(DB.days[k])) ex++; }
+  $("s_exam").textContent = ex;
+
+  var max = 1;
+  w.forEach(function(x){ max = Math.max(max, num(x.d.rev), num(x.d.due)); });
+  var sp = $("spark"); sp.innerHTML = "";
+  w.forEach(function(x){
+    var col = document.createElement("div"), fill = document.createElement("i");
+    col.style.height = Math.max(2, Math.round(num(x.d.due)/max*64)) + "px";
+    fill.style.height = Math.round(num(x.d.rev)/max*64) + "px";
+    col.title = x.k + " — " + num(x.d.rev) + " of " + num(x.d.due);
+    col.appendChild(fill); sp.appendChild(col);
+  });
+  var a = w[0].k.split("-");
+  $("sparkA").textContent = ord(+a[2]) + " " + MON[+a[1]-1].slice(0,3);
+
+  // virtue profile
+  var html = "", worst = null, worstAvg = 99, any = false;
+  VIRTUES.forEach(function(v){
+    var vals = [];
+    w.forEach(function(x){ var n = num((x.d.vir||{})[v[0]]); if(n) vals.push(n); });
+    var avg = vals.length ? vals.reduce(function(a,b){return a+b;},0)/vals.length : 0;
+    if(vals.length){ any = true; if(avg < worstAvg){ worstAvg = avg; worst = v[1]; } }
+    html += '<div class="vbar"><div class="n">' + v[1] + '</div><div class="t"><i style="width:'
+         + Math.round(avg/3*100) + '%"></i></div><div class="v">' + (vals.length ? avg.toFixed(1) : "—") + "</div></div>";
+  });
+  $("vProfile").innerHTML = html;
+
+  var notes = "";
+  var tail = w.slice(-4, -1), short = 0;
+  tail.forEach(function(x){ if(num(x.d.due) > 0 && num(x.d.rev) < num(x.d.due)) short++; });
+  if(short >= 3) notes += '<div class="counsel-note">Three days running you have finished short of the queue. Backlogs compound — set new cards to zero for a few days and clear the pile first.</div>';
+  if(any && worst) notes += '<div class="counsel-note">Of the four, <strong>' + worst.toLowerCase() + '</strong> has stood weakest this month. Worth putting in tomorrow\'s line at the top of the page.</div>';
+  $("noteBox").innerHTML = notes;
+}
+
+/* ══ render: record ══ */
+function drawRec(){
+  var keys = [], k;
+  for(k in DB.days){ if(DB.days.hasOwnProperty(k)){ var d = DB.days[k];
+    if(examined(d) || String(d.aim||"").trim() || String(d.extra||"").trim() || String(d.jrnl||"").trim()) keys.push(k); } }
+  keys.sort().reverse();
+  var box = $("recList");
+  if(!keys.length){
+    box.innerHTML = '<p class="empty">Nothing set down yet. Answer the three questions on the Tonight page and the night will be kept here, in order, with its count beside it. This page is the point of the whole thing — in a month you will be able to read what you were actually like.</p>';
+    return;
+  }
+  var html = "";
+  keys.slice(0,150).forEach(function(k){
+    var d = DB.days[k], p = k.split("-"), dt = fromKey(k), i;
+    var marks = "";
+    VIRTUES.forEach(function(v){ var n = num((d.vir||{})[v[0]]); if(n) marks += v[1].charAt(0) + n + " "; });
+    html += '<div class="entry"><div class="eh"><div class="ed">' + DOW[dt.getDay()].slice(0,3) + " " + ord(+p[2]) + " " + MON[+p[1]-1] + " " + p[0]
+          + '</div><div class="en">' + num(d.rev) + " rev · " + num(d.nw) + " new" + (marks ? "<br>" + marks : "") + "</div></div>";
+    if(String(d.aim||"").trim()) html += '<div class="aim">' + esc(d.aim) + "</div>";
+    html += "<dl>";
+    if(String(d.extra||"").trim()) html += '<dt class="alt">Also learned</dt><dd>' + esc(d.extra) + "</dd>";
+    [["wrong","Did wrong"],["right","Did right"],["undone","Left undone"]].forEach(function(f){
+      var v = String(d[f[0]]||"").trim();
+      if(v) html += "<dt>" + f[1] + "</dt><dd>" + esc(v) + "</dd>";
+    });
+    if(String(d.jrnl||"").trim()) html += '<dt class="jr">Journal</dt><dd>' + esc(d.jrnl) + "</dd>";
+    html += "</dl></div>";
+  });
+  box.innerHTML = html;
+}
+
+/* ══ views ══ */
+var VIEWS = ["tonight","cal","rec"];
+function show(n){
+  VIEWS.forEach(function(v){
+    $("v-" + v).className = "view" + (v === n ? " on" : "");
+  });
+  var b = $("nav").getElementsByTagName("button");
+  for(var i = 0; i < b.length; i++) b[i].className = (b[i].getAttribute("data-v") === n ? "sel" : "");
+  try{
+    if(n === "cal"){ drawCal(); drawStats(); }
+    if(n === "rec"){ drawRec(); }
+  }catch(e){}
+}
+
+/* ══ wiring — attached before any rendering ══ */
+$("nav").addEventListener("click", function(e){
+  var t = e.target;
+  while(t && t !== this && t.tagName !== "BUTTON") t = t.parentNode;
+  if(!t || t === this) return;
+  show(t.getAttribute("data-v"));
+  window.scrollTo(0, 0);
+});
+
+Array.prototype.forEach.call(document.querySelectorAll("[data-f]"), function(el){
+  fields[el.getAttribute("data-f")] = el;
+  el.addEventListener("input", function(){
+    day(sel)[el.getAttribute("data-f")] = el.value;
+    save();
+    try{ drawTally(); drawSeal(); }catch(e){}
+  });
+});
+
+$("grid").addEventListener("click", function(e){
+  var t = e.target;
+  while(t && t !== this && !t.getAttribute("data-k")) t = t.parentNode;
+  if(!t || t === this) return;
+  sel = t.getAttribute("data-k");
+  drawHead(); drawForm(); drawCal();
+  show("tonight");
+  window.scrollTo(0, 0);
+});
+$("mPrev").addEventListener("click", function(){ cur.setMonth(cur.getMonth()-1); drawCal(); });
+$("mNext").addEventListener("click", function(){ cur.setMonth(cur.getMonth()+1); drawCal(); });
+
+var io = $("ioBox");
+$("bExport").addEventListener("click", function(){
+  io.style.display = "block"; $("restoreRow").style.display = "none";
+  io.value = JSON.stringify(DB); io.select(); toast("Copy this text");
+});
+$("bOpenRestore").addEventListener("click", function(){
+  io.style.display = "block"; io.value = ""; $("restoreRow").style.display = "flex"; io.focus();
+  toast("Paste your backup");
+});
+$("bRestore").addEventListener("click", function(){
+  try{
+    var o = JSON.parse(io.value);
+    if(!o || typeof o !== "object" || !o.days) throw 0;
+    DB = o; if(!DB.days) DB.days = {}; if(!DB.exam) DB.exam = "2026-12-06";
+    save(); drawAll(); io.style.display = "none"; $("restoreRow").style.display = "none";
+    toast("Ledger restored");
+  }catch(e){ toast("That is not a ledger"); }
+});
+$("bWipe").addEventListener("click", function(){
+  if(!confirm("Erase every day and every examination? This cannot be undone.")) return;
+  DB = { days:{}, exam:"2026-12-06" }; save(); drawAll(); toast("Ledger erased");
+});
+
+var tT;
+function toast(m){
+  var t = $("toast"); t.textContent = m; t.className = "toast on";
+  clearTimeout(tT); tT = setTimeout(function(){ t.className = "toast"; }, 1900);
+}
+
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState !== "visible") return;
+  var k = key(new Date());
+  if(k !== TODAY){ TODAY = k; sel = k; cur = fromKey(k); cur.setDate(1); drawAll(); }
+});
+
+/* ══ go ══ */
+function drawAll(){
+  try{ drawCounsel(); }catch(e){}
+  try{ drawHead(); }catch(e){}
+  try{ drawForm(); }catch(e){}
+  try{ drawCal(); }catch(e){}
+  try{ drawStats(); }catch(e){}
+  try{ drawRec(); }catch(e){}
+}
+/* ══ ambient: gold in the air ══ */
+(function(){
+  var host = $("motes");
+  if(!host) return;
+  var seed = 1210180;                       // fixed, so it is the same sky every night
+  function rnd(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+  var frag = document.createDocumentFragment(), i;
+  for(i = 0; i < 22; i++){
+    var depth = rnd();                      // 0 far and slow, 1 near and bright
+    var m = document.createElement("div"), dot = document.createElement("i");
+    m.className = "mote";
+    m.style.left = (1 + rnd() * 97).toFixed(1) + "%";
+    m.style.animationDuration = (80 - depth * 36).toFixed(0) + "s";
+    m.style.animationDelay = "-" + (rnd() * 78).toFixed(0) + "s";
+    m.style.opacity = (0.2 + depth * 0.52).toFixed(2);
+    var px = (1.8 + depth * 2.8).toFixed(1) + "px";
+    dot.style.width = px; dot.style.height = px;
+    dot.style.animationDuration = (7 + rnd() * 8).toFixed(1) + "s";
+    dot.style.animationDelay = "-" + (rnd() * 10).toFixed(1) + "s";
+    m.appendChild(dot);
+    frag.appendChild(m);
+  }
+  host.appendChild(frag);
+})();
+
+buildVir();
+drawAll();
+
+})();
+</script>
+</body>
+</html>
