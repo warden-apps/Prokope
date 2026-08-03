@@ -2,7 +2,7 @@
   "name": "Prokop\u0113 \u2014 the nightly ledger",
   "short_name": "Prokop\u0113",
   "description": "Anki's numbers and Seneca's three questions, kept in one place.",
-  "start_url": "./prokope.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
