@@ -25,7 +25,7 @@ self.addEventListener("fetch", function(e){
       return res;
     }).catch(function(){
       return caches.match(req).then(function(hit){
-        return hit || caches.match("./prokope.html");
+        return hit || caches.match("./index.html");
       });
     })
   );
