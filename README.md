@@ -1,89 +1,70 @@
-# ΠΡΟΚΟΠΗ · Prokopē
+# Prokopē
 
-*The Stoic word for the progress a person is making toward becoming good. Not arrival. Progress.*
+Your daily rhythm, remembered. A private tracker for routines, plans, and the things you do along the way. No account, dependencies, or build step.
 
-A nightly ledger: Anki's numbers and Seneca's three questions, kept in one place. One HTML file, no build step, no dependencies, no network, no account. Everything you write stays in your browser.
+## The daily loop
 
----
+- **Routines:** create an activity such as “Take creatine.” Repeat daily, on selected weekdays, every N days from a start date, or on a day of the month. Monthly dates that do not exist in a shorter month are skipped.
+- **Plans:** add something for a specific date, with an optional planned time. Plan tomorrow without recording it as already done.
+- **Optional activities:** keep reusable activities such as reading or going for a walk. They are available when you want them, without becoming daily obligations.
+- **Automatic times:** mark an activity done to record the actual time of the tap. Timed activities have Start and Finish actions, preserving both times and the elapsed duration.
+- **Quick logging:** type something you just did to add it directly to today's timeline with the current time.
+- **History:** choose today, yesterday, or another date to see what happened and when. Activity names are saved with each entry, so renaming or archiving an activity does not erase its past.
 
-## Put it online
+A planned time is a label in your schedule, not a notification or alarm. Completion is recorded at the actual time you act. Times use your device's local timezone when an event is recorded. A timer keeps its starting timestamp across app closures; it does not need a background process to keep running. A session that crosses midnight appears on both relevant days.
 
-```
-your-repo/
-├── index.html          the whole app
-├── manifest.json       makes it installable
-├── sw.js               opens with no signal
-├── apple-touch-icon.png
-├── icon-512.png
-└── README.md
-```
+## Install on iPhone
 
-Push all of it, then **Settings → Pages → Deploy from a branch → `main` / `root`**.
+1. Serve the app over HTTPS, for example with GitHub Pages.
+2. Open it in Safari and choose **Share → Add to Home Screen**. Enable **Open as Web App** if Safari offers that option.
+3. Open the installed app once while online so its files can be saved for offline use.
+4. Afterwards, reopen it from the Home Screen and use it without a connection. Routines, plans, timers, and your history work locally.
 
-It will be served at `https://<user>.github.io/<repo>/`. Open that on your phone in Safari, then **Share → Add to Home Screen**. It launches full screen with no browser chrome.
+Safari may use separate storage for a browser tab and the installed app. Make a backup before changing how you open the app, and restore it in the destination if needed. Do not assume that installing or uninstalling an app transfers its data.
 
-> Changed the icon? Delete the Home Screen shortcut and add it again — iOS caches icons hard.
-
-You may see `.nojekyll` recommended for GitHub Pages. This repo does not need it: there are no Liquid tags (`{{` or `{%`), no files beginning with an underscore, and no YAML front matter, so Jekyll copies every file through untouched. iOS Files will not let you create a name beginning with a dot anyway — if you ever do want it, make it on github.com with **Add file → Create new file** and type `.nojekyll` as the name.
-
-## Or no server at all
-
-`index.html` works from the Files app or any folder — the icon is embedded in the file as base64, so a lone copy still has one. The service worker simply does nothing on `file://`.
-
-## The nightly loop
-
-1. **Set for today** — one thing that must be done before you sleep.
-2. **The count** — open Anki → deck → *Stats*, copy the **Today** block, paste it in. The fields fill themselves.
-3. **The examination** — the three questions Sextius asked himself every night, and Seneca after him.
-4. **The four virtues** — wisdom, justice, courage, temperance. Untouched is a fair answer.
-5. **The journal** — whatever the day left in you.
-
-Three marks under the date — *Counted · Examined · Written* — light as you go, so you can see what is left without scrolling.
-
-## Reading the Anki paste
-
-Anki wraps every number in invisible Unicode bidi marks (U+2068/U+2069); those are stripped before parsing. The breakdown line is read carefully:
-
-```
-Studied 66 cards in 12.65 minutes today
-Again count: 11 (16.67%)
-Learn: 3, Review: 55, Relearn: 8, Filtered: 0
-Correct answers on mature cards: 23/26 (88.46%)
-```
-
-- **Reviewed → 55**, from the *Review* line. The 66 total counts learning and relearning steps too.
-- **New → 3**, from *Learn*.
-- **Correct → 83.33%**, derived as 100 − the again rate. Derived values carry a dashed border; tap one to see the reasoning.
-- **Mature → 88.46%** — the number that says a word is actually yours.
-
-*Studied* and *Relearn* appear as dim chips: context, not queue progress.
+Updates download in the background when online. Apply the available update in the app when convenient; the complete new app replaces the previous version together. Installing on a physical iPhone should still be checked before a release; Chromium tests do not establish every iOS behavior.
 
 ## Your data
 
-It lives in `localStorage` under `keikoroku.v1` and is never sent anywhere.
+Everything is stored in this browser on this device. Nothing is sent to a server, and there is no automatic sync between devices. Use the backup controls in Settings to export a JSON copy and restore it later. Keep a backup outside the browser: clearing site data, removing the app, private browsing, or browser storage eviction can remove local records. Installing the app does not replace backups.
 
-Browsers do clear storage — an installed Home Screen app is far safer than a plain tab. **Download backup** on the Record page writes a real `.json`; **Restore from file** reads it back. The app counts the days since your last backup and says something if it has been a while. Every destructive action has one level of undo.
+Restore validates the file before replacing the current tracker. Export your current data first if you want to keep both copies. Archived activities retain their existing history.
 
-## How it is built
+The previous nightly ledger is left untouched under its original `keikoroku.v1` storage key. The new tracker uses separate storage. Settings can export the old ledger so an app update does not discard it; it is not automatically converted into activity entries.
 
-No frameworks, no dependencies, ES5 throughout for old Safari.
+## Run locally
 
-**The background** is a cloner grid running a scale wave. Every clone is a scale — high shoulders, a belly drawn to a soft point, a spine down the middle. Rows lap and offset by half a cell, so it reads as a hide rather than a grid. A travelling sine sets each clone's size, crossed with a slower one so the ripple never repeats, and the effector's heading turns slowly. Six tones run from deep gold at the head of the field to steel at its foot, with a seam that drifts sideways — two poles, never a spectrum. The ramp is deliberately dark: nothing in it exceeds 148 in luminance, and no step is desaturated, because a pale or neutral tone at the top of the field lands directly behind the masthead and washes the type. Only the crest lights: alpha is cubed, so most of the hide stays dark and a band catches as the wave passes. Seal a night and a ring of light runs out through the scales.
+Python 3 is sufficient:
 
-It is cheap on purpose: about 325 `drawImage` calls a frame from six pre-rendered sprites, no path building in the loop. Earlier attempts stuttered because they stroked thousands of paths per frame, or spread the work over twenty composited DOM layers.
+```sh
+cd /path/to/Prokope
+python3 -m http.server 8000 --bind 127.0.0.1
+```
 
-**The calendar** is a dark tray, and the month begins unlit. Each day takes the light it earns — six steps from near-black to burning gold — so a good month glows and a thin one doesn't. Every step is contrast-checked against its own day number; the lowest passes at 4.7:1.
+Use the server from a local browser. Loopback HTTP is a secure context for service-worker development; a phone connecting to a computer's ordinary HTTP LAN address is not. Use an HTTPS deployment for the iPhone PWA. Opening `index.html` directly with `file://` is not the supported offline installation flow.
 
-**Everything else that moves** is CSS on the compositor: every keyframe animates `transform` and `opacity` alone, so nothing touches layout. `prefers-reduced-motion` stops all of it.
+The app uses plain JavaScript, CSS, and local PNG icons. No package installation or compilation is required. Development checks:
 
-### Three traps worth knowing
+```sh
+node --test tests/model.test.js
+python3 tests/browser_smoke.py
+```
 
-`globalCompositeOperation = "lighter"` on a *transparent* canvas accumulates alpha as well as colour. Sixteen overlapping shapes saturate to an opaque `rgb(255,255,190)` wash that replaces the page. Fill an opaque ground first.
+The browser smoke test requires Python Playwright and Chromium as development tools, and the local server running on port 8000. They are not runtime dependencies of the app.
 
-CSS blocks are load-bearing. Deleting a rule while its element stays in the markup silently turns a `position:fixed` layer into a giant block in the document flow. Check for orphaned classes after any refactor.
+## Publish with GitHub Pages
 
-Measure the whole stack, not the layer you just changed. The background washed out for several rounds because three soft radial `.aura` divs sat behind the wave — where all three overlapped they lifted the page ground to luminance 70, so the scales appeared *darker* than what was behind them. Every measurement missed it because every measurement modelled the wave alone. They are gone. So is the 300px `.lampglow` oval behind the title (+49 levels) and the silhouette at the right edge (+24). The background is now the wave, a vignette and a little grain, and nothing else — audit the *whole* set of full-page layers before trusting any number.
+Commit the app files, then choose **Settings → Pages → Deploy from a branch → main / root**. GitHub Pages serves the project below its repository path; the manifest and service worker use relative paths so the same files work at both a domain root and a project path.
 
----
+```text
+index.html              application shell
+styles.css              responsive layout
+model.js                scheduling and records
+app.js                  interactions and local storage
+manifest.json           installed-app metadata
+sw.js                   offline app shell and update lifecycle
+apple-touch-icon.png    iPhone Home Screen icon
+icon-512.png            web app icon
+```
 
-ζῆν κατὰ φύσιν
+When shipping changes to an app-shell file, bump `CACHE_VERSION` in `sw.js`. Core files are installed as a complete set and served from that version's cache, preventing an older open app from fetching a mix of new scripts and old markup. A failed download leaves the previous installed version active. The service worker only manages its own scope's caches and does not erase sibling applications on the same origin.

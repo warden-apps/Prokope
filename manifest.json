@@ -1,13 +1,13 @@
 {
-  "name": "Prokopē — the nightly ledger",
+  "id": "./",
+  "name": "Prokopē — your daily rhythm",
   "short_name": "Prokopē",
-  "description": "Anki's numbers and Seneca's three questions, kept in one place.",
+  "description": "Daily routines, plans, and a timeline of what you did. Private and available offline.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#221A20",
-  "theme_color": "#221A20",
+  "background_color": "#f7f5f0",
+  "theme_color": "#f7f5f0",
   "icons": [
     {
       "src": "apple-touch-icon.png",
@@ -21,10 +21,5 @@
       "purpose": "any"
     }
   ],
-  "categories": [
-    "productivity",
-    "education",
-    "lifestyle"
-  ],
-  "id": "./"
+  "categories": ["productivity", "lifestyle"]
 }
