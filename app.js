@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   var M = window.ProkopeModel;
+  var T = window.ProkopeTimeline;
   var KEY = 'prokope.daily.v1';
   var LEGACY_KEY = 'keikoroku.v1';
   var $ = function (id) { return document.getElementById(id); };
@@ -8,6 +9,8 @@
   var selected = M.localDate(), today = selected, view = 'today';
   var undoAction = null, toastTimer, waitingWorker, updateRequested = false;
   var confirmResolve = null, restoreBusy = false;
+  var clockMinute = '', recordOriginal = null;
+  var mapDates = { today: '', history: '' };
 
   function escape(value) {
     return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -34,10 +37,7 @@
     return dateObject(key).toLocaleDateString(undefined, options || { weekday: 'long', month: 'long', day: 'numeric' });
   }
   function clock(stamp, offset) {
-    if (typeof offset === 'number') {
-      return new Date(Date.parse(stamp) - offset * 60000).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC' });
-    }
-    return new Date(stamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+    return T.clock24(stamp, offset);
   }
   function plannedClock(value) { return value ? clock('2000-01-01T' + value + ':00') : ''; }
   function elapsed(entry) {
@@ -92,6 +92,7 @@
       render();
       return { value: result };
     } catch (error) {
+      if (options.onError) options.onError(error);
       if (error instanceof SyntaxError) {
         storageLocked = true;
         try { rawUnreadable = localStorage.getItem(KEY); } catch (_) { /* Preserve existing data. */ }
@@ -173,7 +174,7 @@
     }
     return '<article class="task-card' + (library ? ' library-card' : '') + (done ? ' is-done' : '') + (active ? ' is-running' : '') + '"><div class="task-icon ' + task.kind + '">' + icon(task.kind) + '</div><div class="task-content"><h3 class="task-name">' + escape(task.name) + '</h3><p class="task-meta">' + escape(meta) + (task.archivedAt ? ' · Archived' : '') + '</p></div><div class="task-actions">' + actions + '</div></article>';
   }
-  function timeline(entries) {
+  function recordList(entries, allDays) {
     if (!entries.length) return empty(selected > today ? 'A little space for tomorrow.' : 'Your day is still unfolding.', selected > today ? 'Planned activities will appear in your daily list. Actual times are recorded when you do them.' : 'Complete an activity or log a moment. Its time will appear here automatically.');
     return entries.map(function (entry) {
       var label = entry.kind === 'quick' ? 'A moment logged' : entry.kind === 'routine' ? 'Routine completed' : entry.kind === 'planned' ? 'Planned activity completed' : 'Optional activity';
@@ -181,25 +182,90 @@
       if (entry.date !== selected) label += ' · Started ' + dateLabel(entry.date, { month: 'short', day: 'numeric' });
       if (entry.endDate && entry.endDate !== entry.date) label += ' · Finished ' + dateLabel(entry.endDate, { month: 'short', day: 'numeric' });
       if (entry.kind === 'planned' && entry.occurrenceDate !== entry.date) label += ' · Planned for ' + dateLabel(entry.occurrenceDate, { month: 'short', day: 'numeric' });
-      var actions = entry.endAt === null ? actionButton('finish', entry.id, 'Finish', 'text-button') : '';
+      var actions = actionButton('edit-entry', entry.id, 'Details', 'text-button');
+      if (entry.endAt === null) actions += actionButton('finish', entry.id, 'Finish', 'text-button');
+      if (allDays) actions += actionButton('visit-entry', entry.id, dateLabel(entry.date, { month: 'short', day: 'numeric', year: 'numeric' }), 'text-button', ' data-date="' + entry.date + '"');
       actions += actionButton('remove-entry', entry.id, icon('remove'), 'icon-button', ' aria-label="Remove record for ' + escape(entry.title) + '"');
-      return '<article class="timeline-item' + (entry.endAt === null ? ' is-running' : '') + '"><time class="timeline-time" datetime="' + entry.startAt + '">' + escape(clock(entry.startAt, entry.startOffset)) + '</time><span class="timeline-dot"></span><div class="timeline-content"><h3 class="timeline-title">' + escape(entry.title) + '</h3><p class="timeline-detail">' + escape(label) + '</p></div><div class="timeline-actions">' + actions + '</div></article>';
+      return '<article class="timeline-item' + (entry.endAt === null ? ' is-running' : '') + '"><time class="timeline-time" datetime="' + entry.startAt + '">' + escape(clock(entry.startAt, entry.startOffset)) + '</time><span class="timeline-dot"></span><div class="timeline-content"><h3 class="timeline-title">' + escape(entry.title) + '</h3><p class="timeline-detail">' + escape(label) + '</p>' + (entry.note ? '<p class="entry-detail-note">' + escape(entry.note) + '</p>' : '') + '</div><div class="timeline-actions">' + actions + '</div></article>';
     }).join('');
+  }
+  function minuteLabel(minute) {
+    if (minute >= 1440) return '24:00';
+    return String(Math.floor(minute / 60)).padStart(2, '0') + ':' + String(Math.floor(minute % 60)).padStart(2, '0');
+  }
+  function dayMap(containerId, name, entries, due) {
+    var container = $(containerId), previous = container.querySelector('.day-scroll');
+    var scrollTop = previous && mapDates[name] === selected ? previous.scrollTop : null;
+    var focus = container.contains(document.activeElement) ? document.activeElement.dataset.entryId || document.activeElement.dataset.taskId || '' : '';
+    var items = [];
+    entries.forEach(function (entry) {
+      var segment = T.segment(entry, selected);
+      if (segment) items.push(Object.assign(segment, { entry: entry }));
+    });
+    due.forEach(function (task) {
+      if (!task.schedule.time || !M.isDue(task, selected) || taskEntry(task, task.kind === 'planned' ? task.schedule.date : selected)) return;
+      var parts = task.schedule.time.split(':').map(Number), minute = parts[0] * 60 + parts[1];
+      items.push({ id: task.id, task: task, startMinute: minute, endMinute: minute, point: true });
+    });
+    var positioned = T.layout(items, 46);
+    var hours = Array.from({ length: 25 }, function (_, hour) {
+      return '<div class="hour-row" style="top:calc(24px + var(--day-height) * ' + hour / 24 + ')"><span class="hour-label">' + String(hour).padStart(2, '0') + ':00</span><span class="hour-rule"></span></div>';
+    }).join('');
+    var marks = positioned.map(function (item) {
+      var entry = item.entry, planned = !!item.task;
+      var title = planned ? item.task.name : entry.title;
+      var times = planned ? item.task.schedule.time + ' · Planned' : clock(entry.startAt, entry.startOffset);
+      var detail = planned ? 'Not recorded' : item.point ? 'Recorded' : entry.endAt ? clock(entry.startAt, entry.startOffset) + '–' + clock(entry.endAt, entry.endOffset) + ' · ' + elapsed(entry) : 'In progress · ' + elapsed(entry);
+      if (item.continuesBefore) times = '00:00 · Continued';
+      if (item.continuesAfter && !planned) detail += ' · Continues past midnight';
+      if (item.clockShift) detail += ' · Clock changed';
+      var classes = (planned ? ' is-planned' : item.point ? ' is-point' : ' is-timer') + (item.running ? ' is-running' : '');
+      var span = item.displayEnd - item.displayStart;
+      var shortTimer = !planned && !item.point && item.endMinute - item.startMinute < 46;
+      if (shortTimer) {
+        classes += ' is-short';
+        times += ' · ' + elapsed(entry);
+      }
+      var durationBar = shortTimer ? '<span class="event-duration-bar" style="top:' + (item.startMinute - item.displayStart) / span * 100 + '%;height:' + Math.max(1, (item.endMinute - item.startMinute) / span * 100) + '%"></span>' : '';
+      var attrs = planned ? ' data-action="edit" data-id="' + escape(item.task.id) + '" data-task-id="' + escape(item.task.id) + '"' : ' data-action="edit-entry" data-id="' + escape(entry.id) + '" data-entry-id="' + escape(entry.id) + '"';
+      return '<button type="button" class="map-event' + classes + '"' + attrs + ' data-start-minute="' + item.startMinute + '" data-end-minute="' + item.endMinute + '" style="top:' + item.displayStart / 1440 * 100 + '%;height:' + span / 1440 * 100 + '%;left:' + item.lane / item.lanes * 100 + '%;width:calc(' + 100 / item.lanes + '% - 5px)" aria-label="' + escape(title + ' · ' + times + ' · ' + detail) + '">' + durationBar + '<span class="event-anchor" style="top:' + Math.min(98, Math.max(0, (item.startMinute - item.displayStart) / span * 100)) + '%"></span><span class="event-clock">' + escape(times) + '</span><span class="event-title">' + escape(title) + '</span>' + (!item.point && span >= 76 ? '<span class="event-duration">' + escape(detail) + '</span>' : '') + '</button>';
+    }).join('');
+    var mini = positioned.map(function (item) {
+      return '<button type="button" class="overview-mark' + (item.task ? ' is-planned' : '') + (item.running ? ' is-running' : '') + '" style="left:' + item.startMinute / 1440 * 100 + '%;width:max(3px,' + Math.max(0, item.endMinute - item.startMinute) / 1440 * 100 + '%)" data-action="jump-minute" data-map="' + name + '" data-minute="' + item.startMinute + '" aria-label="Jump to ' + escape(minuteLabel(item.startMinute) + ': ' + (item.task ? item.task.name : item.entry.title)) + '"></button>';
+    }).join('');
+    var now = selected === today ? '<div class="now-line" style="top:' + T.minutesAt(new Date()) / 1440 * 100 + '%"><span>Now ' + clock(new Date()) + '</span></div>' : '';
+    container.innerHTML = '<div class="day-overview" aria-label="Whole-day overview">' + mini + (selected === today ? '<span class="overview-now" style="left:' + T.minutesAt(new Date()) / 1440 * 100 + '%"></span>' : '') + '</div><div class="overview-labels" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div><div class="day-scroll" data-map="' + name + '" tabindex="0" role="region" aria-label="' + escape(dateLabel(selected)) + ', 00:00 to 24:00; scroll to explore"><div class="day-canvas" style="--day-height:1440px">' + hours + '<div class="map-lanes">' + marks + now + '</div></div></div>' + (!items.length ? '<p class="map-empty-hint">' + (selected > today ? 'An open day. Give a plan a time to place it here.' : 'No moments recorded yet. Your first one will find its place here.') + '</p>' : '');
+    var scroller = container.querySelector('.day-scroll');
+    if (scrollTop !== null) scroller.scrollTop = scrollTop;
+    else scroller.scrollTop = Math.max(0, (selected === today ? T.minutesAt(new Date()) - 120 : positioned.length ? positioned[0].startMinute - 60 : 0));
+    mapDates[name] = selected;
+    if (focus) {
+      var target = Array.from(container.querySelectorAll('.map-event')).find(function (button) { return button.dataset.entryId === focus || button.dataset.taskId === focus; });
+      if (target) target.focus({ preventScroll: true });
+    }
+  }
+  function renderMaps() {
+    var entries = M.entriesForDate(state, selected), due = M.tasksForDate(state, selected);
+    dayMap('timeline-list', 'today', entries, due);
+    dayMap('history-timeline', 'history', entries, due);
+    $('history-map-date').textContent = dateLabel(selected, { month: 'long', day: 'numeric' });
+    document.querySelectorAll('[data-action="jump-now"]').forEach(function (button) { button.hidden = selected !== today; });
+    document.querySelectorAll('[data-action="jump-first"]').forEach(function (button) { button.disabled = !entries.length; });
+  }
+  function renderHistory() {
+    var query = $('history-search').value.trim().toLocaleLowerCase();
+    var entries = query ? state.entries.filter(function (entry) { return (entry.title + ' ' + (entry.note || '')).toLocaleLowerCase().includes(query); }).sort(function (a, b) { return b.startAt.localeCompare(a.startAt); }) : M.entriesForDate(state, selected);
+    $('history-results-count').textContent = query ? entries.length + ' matches across all days' + (entries.length > 100 ? ' · Showing the latest 100' : '') : entries.length + (entries.length === 1 ? ' moment on this day' : ' moments on this day');
+    $('history-records').innerHTML = entries.length ? recordList(entries.slice(0, 100), !!query) : empty(query ? 'No moments found.' : 'Nothing recorded here yet.', query ? 'Try an activity name or a word from your notes.' : 'Add a missed moment to fill in the picture.');
+  }
+  function scrollMap(name, minute) {
+    var scroller = $(name === 'history' ? 'history-timeline' : 'timeline-list').querySelector('.day-scroll');
+    if (scroller) scroller.scrollTo({ top: Math.max(0, minute - 110), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
   function summary(entries, due) {
     var completed = due.filter(function (task) { return !!(taskEntry(task, task.kind === 'planned' ? task.schedule.date : selected) || {}).endAt; }).length;
     var finished = entries.filter(function (entry) { return entry.endAt; }).length;
-    var seconds = entries.reduce(function (sum, entry) {
-      if (entry.tracking !== 'timer') return sum;
-      // Only count the part of a session inside the selected calendar day.
-      // Keep recorded-day totals anchored to the clock used for the entry,
-      // even when the reader has since travelled to another timezone.
-      var firstOffset = selected === entry.date || !entry.endDate ? entry.startOffset : entry.endOffset;
-      var lastOffset = selected === entry.endDate ? entry.endOffset : firstOffset;
-      var start = Date.parse(selected + 'T00:00:00Z') + firstOffset * 60000;
-      var end = Date.parse(M.addDays(selected, 1) + 'T00:00:00Z') + lastOffset * 60000;
-      return sum + Math.max(0, Math.min(Date.parse(entry.endAt || new Date().toISOString()), end) - Math.max(Date.parse(entry.startAt), start));
-    }, 0);
+    var seconds = T.dayDuration(entries, selected);
     return '<div class="summary-card"><span class="summary-value">' + completed + '<small> / ' + due.length + '</small></span><span class="summary-label">Planned & routine</span></div><div class="summary-card"><span class="summary-value">' + finished + '</span><span class="summary-label">Moments recorded</span></div><div class="summary-card"><span class="summary-value">' + Math.floor(seconds / 60000) + '<small> min</small></span><span class="summary-label">Time spent</span></div>';
   }
   function renderDays() {
@@ -216,6 +282,15 @@
       return '<div class="running-card"><span class="running-pulse"></span><div class="task-content"><strong>' + escape(entry.title) + '</strong><p>Started ' + escape(clock(entry.startAt, entry.startOffset)) + ' <span data-elapsed="' + escape(entry.id) + '">' + escape(elapsed(entry)) + '</span></p></div>' + actionButton('finish', entry.id, icon('stop') + ' Finish', 'action-button') + '</div>';
     }).join('');
   }
+  function dailyTasks(date) {
+    var due = M.tasksForDate(state, date);
+    if (date === today) {
+      state.tasks.forEach(function (task) {
+        if (task.kind === 'planned' && !task.archivedAt && task.schedule.date < today && !taskEntry(task, task.schedule.date)) due.push(task);
+      });
+    }
+    return due;
+  }
   function render() {
     today = M.localDate();
     ['today', 'library', 'history'].forEach(function (name) { $(name + '-view').hidden = view !== name; });
@@ -228,12 +303,7 @@
     $('view-subtitle').textContent = view === 'library' ? 'Your routines, plans, and things you love to do.' : dateLabel(selected) + (selected === today ? ' · Today' : selected === M.addDays(today, -1) ? ' · Yesterday' : '');
     renderDays();
     renderActive();
-    var due = M.tasksForDate(state, selected);
-    if (selected === today) {
-      state.tasks.forEach(function (task) {
-        if (task.kind === 'planned' && !task.archivedAt && task.schedule.date < today && !taskEntry(task, task.schedule.date)) due.push(task);
-      });
-    }
+    var due = dailyTasks(selected);
     var routines = due.filter(function (task) { return task.kind === 'routine'; });
     var planned = due.filter(function (task) { return task.kind === 'planned'; });
     var optional = state.tasks.filter(function (task) { return task.kind === 'optional' && !task.archivedAt; });
@@ -247,8 +317,8 @@
     $('optional-list').innerHTML = optional.length ? optional.map(function (task) { return taskCard(task); }).join('') : empty('Leave room for a little spontaneity.', 'Keep a list of things you enjoy. Do them when it feels right, with no streak to keep.', addButton('optional', 'Add an optional activity'));
     $('quick-log-form').hidden = selected !== today;
     $('timeline-date').textContent = selected === today ? 'TODAY’S TIMELINE' : dateLabel(selected, { month: 'short', day: 'numeric' }).toUpperCase();
-    $('timeline-list').innerHTML = timeline(entries);
-    $('history-timeline').innerHTML = timeline(entries);
+    renderMaps();
+    renderHistory();
     var libraryTasks = state.tasks.filter(function (task) { return $('show-archived').checked || !task.archivedAt; });
     var library = '';
     [['routine', 'Routines'], ['planned', 'Planned tasks'], ['optional', 'Optional activities']].forEach(function (group) {
@@ -302,6 +372,57 @@
     $('task-dialog').showModal();
     $('task-name').focus();
   }
+  function recordedTime(stamp, offset) {
+    return new Date(Date.parse(stamp) - offset * 60000).toISOString().slice(11, 19);
+  }
+  function offsetLabel(offset) {
+    return 'UTC' + (offset <= 0 ? '+' : '−') + String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0') + ':' + String(Math.abs(offset) % 60).padStart(2, '0');
+  }
+  function recordFields() {
+    var timer = $('record-tracking').value === 'timer';
+    var running = recordOriginal && recordOriginal.endAt === null;
+    $('record-end-fields').hidden = !timer || running;
+    $('record-end-date').required = timer && !running;
+    $('record-end').required = timer && !running;
+    $('record-start-label').textContent = timer ? 'Start time · 24-hour' : 'Time · 24-hour';
+  }
+  function openRecord(id) {
+    var entry = state.entries.find(function (item) { return item.id === id; });
+    recordOriginal = entry ? clone(entry) : null;
+    var now = new Date(), date = selected > today ? today : selected;
+    $('record-form').reset();
+    $('record-id').value = entry ? entry.id : '';
+    $('record-dialog-title').textContent = entry ? 'A moment, remembered.' : 'Fill in the picture.';
+    $('record-eyebrow').textContent = entry ? 'THE ACTUAL RECORD' : 'SOMETHING YOU DID EARLIER';
+    $('record-title').value = entry ? entry.title : '';
+    $('record-tracking').value = entry ? entry.tracking : 'check';
+    $('record-tracking-field').hidden = !!entry;
+    $('record-date').value = entry ? entry.date : date;
+    $('record-start').value = entry ? recordedTime(entry.startAt, entry.startOffset) : T.clock24(now) + ':' + String(now.getSeconds()).padStart(2, '0');
+    $('record-end-date').value = entry && entry.endAt ? entry.endDate : date;
+    $('record-end').value = entry && entry.endAt ? recordedTime(entry.endAt, entry.endOffset) : $('record-start').value;
+    $('record-note').value = entry && entry.note || '';
+    $('record-delete').hidden = !entry;
+    $('record-save').textContent = entry ? 'Save changes' : 'Add moment';
+    $('record-error').hidden = true;
+    $('record-context').textContent = entry ? (entry.tracking === 'timer' ? (entry.endAt ? 'Time spent: ' + elapsed(entry) + '. ' : 'This timer is still running. You can correct its start here. ') : 'Recorded at ' + clock(entry.startAt, entry.startOffset) + '. ') + 'Corrections change this record only.' + (entry.startOffset !== now.getTimezoneOffset() ? ' Times use the original ' + offsetLabel(entry.startOffset) + ' clock.' : '') : 'Add an actual moment you missed. For something still to do, create a plan instead.';
+    var segment = entry && T.segment(entry, selected);
+    if (segment && segment.clockShift) $('record-context').textContent += ' The clock or time zone changed during this activity; elapsed time uses the recorded timestamps.';
+    recordFields();
+    $('record-dialog').showModal();
+    $('record-title').focus();
+  }
+  function inputInstant(date, time, offset, originalStamp, originalDate) {
+    if (!date || !time) throw new Error('Choose a date and time.');
+    var fullTime = time.length === 5 ? time + ':00' : time;
+    if (originalStamp && date === originalDate && fullTime === recordedTime(originalStamp, offset)) return { stamp: originalStamp, offset: offset };
+    var instant = typeof offset === 'number' ? new Date(Date.parse(date + 'T' + fullTime + 'Z') + offset * 60000) : new Date(date + 'T' + fullTime);
+    if (!Number.isFinite(instant.getTime())) throw new Error('Choose a valid date and time.');
+    var chosenOffset = typeof offset === 'number' ? offset : instant.getTimezoneOffset();
+    var wall = new Date(instant.getTime() - chosenOffset * 60000).toISOString();
+    if (wall.slice(0, 10) !== date || wall.slice(11, 19) !== fullTime) throw new Error('That local time does not exist on this date. Choose another time.');
+    return { stamp: instant.toISOString(), offset: chosenOffset };
+  }
   function undoEntry(entry, label) {
     toast(label, function () {
       var result = transact(function (draft) { M.deleteEntry(draft, entry.id); });
@@ -310,6 +431,21 @@
   }
   function handleAction(button) {
     var action = button.dataset.action, id = button.dataset.id, result;
+    if (action === 'edit-entry') { openRecord(id); return; }
+    if (action === 'log-earlier') { openRecord(); return; }
+    if (action === 'jump-section') { $(button.dataset.target).scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (action === 'jump-now') { scrollMap(button.dataset.map, T.minutesAt(new Date())); return; }
+    if (action === 'jump-minute') { scrollMap(button.dataset.map, Number(button.dataset.minute)); return; }
+    if (action === 'jump-first') {
+      var first = M.entriesForDate(state, selected).map(function (entry) { return T.segment(entry, selected); }).filter(Boolean).sort(function (a, b) { return a.startMinute - b.startMinute; })[0];
+      scrollMap(button.dataset.map, first ? first.startMinute : 0); return;
+    }
+    if (action === 'visit-entry') {
+      selected = button.dataset.date; $('history-search').value = ''; render();
+      var entry = state.entries.find(function (item) { return item.id === id; });
+      var segment = entry && T.segment(entry, selected);
+      scrollMap('history', segment ? segment.startMinute : 0); return;
+    }
     if (action === 'new') { openTask(null, button.dataset.kind); return; }
     if (action === 'edit') { openTask(id); return; }
     if (action === 'day') { selected = button.dataset.date; render(); return; }
@@ -442,6 +578,44 @@
       if (result) { $('task-dialog').close(); toast('Archived. Your history is kept.'); }
     });
   });
+  $('record-tracking').addEventListener('change', recordFields);
+  $('record-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    try {
+      var original = recordOriginal;
+      var start = inputInstant($('record-date').value, $('record-start').value, original ? original.startOffset : undefined, original && original.startAt, original && original.date);
+      var tracking = original ? original.tracking : $('record-tracking').value;
+      var end = tracking === 'check' ? start : original && original.endAt === null ? null : inputInstant($('record-end-date').value, $('record-end').value, original ? original.endOffset : undefined, original && original.endAt, original && original.endDate);
+      var input = { title: $('record-title').value, tracking: tracking, startAt: start.stamp, startOffset: start.offset, endAt: end ? end.stamp : null, endOffset: end ? end.offset : null, note: $('record-note').value };
+      var preview = clone(state);
+      if (original) M.updateEntry(preview, original.id, input); else M.createManualEntry(preview, input);
+      var saveMessage = '';
+      var result = transact(function (draft) {
+        if (original && JSON.stringify(draft.entries.find(function (entry) { return entry.id === original.id; })) !== JSON.stringify(original)) {
+          throw new Error('This record changed in another window. Close and reopen it before editing.');
+        }
+        return original ? M.updateEntry(draft, original.id, input) : M.createManualEntry(draft, input);
+      }, { onError: function (error) { saveMessage = error.message; } });
+      if (!result) { $('record-error').textContent = saveMessage || 'The record could not be saved. Check available storage and try again.'; $('record-error').hidden = false; return; }
+      $('record-dialog').close();
+      if (!original) {
+        selected = result.value.date; render();
+        undoEntry(result.value, 'Added at ' + clock(result.value.startAt, result.value.startOffset) + '.');
+      } else toast('Record updated. Your other moments are unchanged.');
+    } catch (error) { $('record-error').textContent = error.message; $('record-error').hidden = false; }
+  });
+  $('record-delete').addEventListener('click', function () {
+    var id = $('record-id').value;
+    confirmAction('Remove this record?', 'Its activity stays in your list. Only this moment and its times will be removed.', 'Remove record').then(function (accepted) {
+      if (!accepted) return;
+      var removed = transact(function (draft) { return M.deleteEntry(draft, id); });
+      if (removed) { $('record-dialog').close(); toast('Record removed.', function () {
+        var restored = transact(function (draft) { draft.entries.push(removed.value); });
+        if (restored) toast('Record restored.');
+      }); }
+    });
+  });
+  $('history-search').addEventListener('input', renderHistory);
   $('quick-log-form').addEventListener('submit', function (event) {
     event.preventDefault();
     var result = transact(function (draft) { return M.logEntry(draft, $('quick-log-name').value); });
@@ -471,7 +645,7 @@
   $('toast-close').addEventListener('click', function () { $('toast').hidden = true; undoAction = null; });
   $('apply-update').addEventListener('click', function () {
     if (!waitingWorker) return;
-    if ($('task-dialog').open) { toast('Save or close your activity before updating.'); return; }
+    if ($('task-dialog').open || $('record-dialog').open) { toast('Save or close your changes before updating.'); return; }
     if ($('quick-log-name').value.trim()) { toast('Log your current note or clear it before updating.'); return; }
     updateRequested = true; waitingWorker.postMessage({ type: 'SKIP_WAITING' });
   });
@@ -491,13 +665,27 @@
     }
   });
   function refreshClock() {
-    var now = M.localDate();
+    var instant = new Date(), now = M.localDate(instant), minute = T.clock24(instant);
+    $('live-clock-value').textContent = minute + ':' + String(instant.getSeconds()).padStart(2, '0');
+    $('live-clock-value').dateTime = instant.toISOString();
     if (now !== today) { if (selected === today) selected = now; today = now; render(); }
+    document.querySelectorAll('.now-line').forEach(function (line) { line.style.top = T.minutesAt(instant) / 1440 * 100 + '%'; line.querySelector('span').textContent = 'Now ' + minute; });
+    document.querySelectorAll('.overview-now').forEach(function (line) { line.style.left = T.minutesAt(instant) / 1440 * 100 + '%'; });
+    if (clockMinute !== minute) {
+      clockMinute = minute;
+      if (M.activeEntries(state).length) {
+        renderMaps();
+        var entries = M.entriesForDate(state, selected), due = dailyTasks(selected);
+        $('day-summary').innerHTML = summary(entries, due);
+        $('history-summary').innerHTML = summary(entries, due);
+      }
+    }
     document.querySelectorAll('[data-elapsed]').forEach(function (el) { var entry = state.entries.find(function (item) { return item.id === el.dataset.elapsed; }); if (entry) el.textContent = elapsed(entry); });
   }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') refreshClock(); });
-  setInterval(refreshClock, 15000);
+  setInterval(refreshClock, 1000);
   load();
   render();
+  refreshClock();
   setupWorker();
 })();

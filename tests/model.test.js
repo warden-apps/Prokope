@@ -271,3 +271,219 @@ test('changing a routine into a one-time plan keeps prior logs and allows its ne
   assert.equal(state.entries.length, 2);
   assert.equal(M.validateState(clone(state)), true);
 });
+
+test('older backups without record-editor metadata remain valid', () => {
+  const state = M.newState();
+  const task = routine(state);
+  const saved = M.completeTask(state, task.id, at('2026-01-01T12:00:00Z'));
+  assert.equal(saved.note, undefined);
+  assert.equal(saved.manual, undefined);
+  assert.equal(saved.updatedAt, undefined);
+  const restored = clone(state);
+  assert.equal(M.validateState(restored), true);
+  M.updateEntry(restored, saved.id, { note: 'Taken with lunch' }, at('2026-01-01T13:00:00Z'));
+  assert.equal(restored.version, 1);
+  assert.equal(M.validateState(clone(restored)), true);
+  assert.equal(state.entries[0].note, undefined);
+});
+
+test('editing a record changes its snapshot and notes without renaming its activity', () => {
+  const state = M.newState();
+  const task = routine(state);
+  const saved = M.completeTask(state, task.id, at('2026-01-01T12:00:00Z'));
+  const taskBefore = clone(task), identity = saved.id;
+  const corrected = M.updateEntry(state, saved.id, {
+    title: '  Creatine after lunch  ', note: '  Mixed into water.  '
+  }, at('2026-01-01T13:00:00Z'));
+  assert.equal(corrected.id, identity);
+  assert.equal(corrected.taskId, task.id);
+  assert.equal(corrected.title, 'Creatine after lunch');
+  assert.equal(corrected.note, 'Mixed into water.');
+  assert.equal(corrected.updatedAt, '2026-01-01T13:00:00.000Z');
+  assert.equal(corrected.startAt, '2026-01-01T12:00:00.000Z');
+  assert.deepEqual(task, taskBefore);
+  assert.equal(M.validateState(state), true);
+});
+
+test('correcting a linked record day keeps the scheduled occurrence it fulfilled', () => {
+  const state = M.newState();
+  const task = routine(state);
+  const saved = M.completeTask(state, task.id, at('2026-01-02T00:10:00Z'));
+  M.updateEntry(state, saved.id, {
+    startAt: '2026-01-01T23:55:00.000Z', startOffset: 0
+  }, at('2026-01-02T01:00:00Z'));
+  assert.equal(saved.date, '2026-01-01');
+  assert.equal(saved.endDate, '2026-01-01');
+  assert.equal(saved.occurrenceDate, '2026-01-02');
+  assert.equal(saved.startAt, saved.endAt);
+  assert.equal(M.entriesForDate(state, '2026-01-01')[0].id, saved.id);
+  assert.equal(M.entriesForDate(state, '2026-01-02').length, 0);
+  assert.equal(M.isCompleted(state, task.id, '2026-01-02'), true);
+  assert.equal(M.isCompleted(state, task.id, '2026-01-01'), false);
+  assert.throws(() => M.completeTask(state, task.id, at('2026-01-02T12:00:00Z')));
+  assert.equal(M.validateState(clone(state)), true);
+});
+
+test('a corrected quick record follows its captured calendar day and timezone', () => {
+  const state = M.newState();
+  const saved = M.logEntry(state, 'Evening walk', at('2026-01-02T10:00:00Z'));
+  M.updateEntry(state, saved.id, {
+    startAt: '2026-01-02T15:10:00.000Z', startOffset: -540
+  }, at('2026-01-03T12:00:00Z'));
+  assert.equal(saved.date, '2026-01-03');
+  assert.equal(saved.endDate, '2026-01-03');
+  assert.equal(saved.occurrenceDate, '2026-01-03');
+  assert.equal(saved.startOffset, -540);
+  assert.equal(saved.endOffset, -540);
+  assert.equal(M.entriesForDate(state, '2026-01-02').length, 0);
+  assert.equal(M.entriesForDate(state, '2026-01-03')[0].id, saved.id);
+  assert.equal(M.validateState(state), true);
+});
+
+test('a manual instant record uses the supplied past time instead of the edit time', () => {
+  const state = M.newState();
+  const saved = M.createManualEntry(state, {
+    title: '  A walk before bed  ', tracking: 'check',
+    startAt: '2026-01-01T14:50:00.000Z', startOffset: -540,
+    note: '  Forgot to log it yesterday.  '
+  }, at('2026-01-02T12:00:00Z'));
+  assert.equal(saved.taskId, null);
+  assert.equal(saved.kind, 'quick');
+  assert.equal(saved.manual, true);
+  assert.equal(saved.title, 'A walk before bed');
+  assert.equal(saved.note, 'Forgot to log it yesterday.');
+  assert.equal(saved.startAt, '2026-01-01T14:50:00.000Z');
+  assert.equal(saved.endAt, saved.startAt);
+  assert.equal(saved.date, '2026-01-01');
+  assert.equal(saved.occurrenceDate, saved.date);
+  assert.equal(saved.updatedAt, '2026-01-02T12:00:00.000Z');
+  assert.equal(state.tasks.length, 0);
+  assert.equal(M.validateState(clone(state)), true);
+});
+
+test('a standalone manual timer can cross midnight without creating a reusable activity', () => {
+  const state = M.newState();
+  const saved = M.createManualEntry(state, {
+    title: 'Read a long chapter', tracking: 'timer',
+    startAt: '2026-01-01T14:45:00.000Z', startOffset: -540,
+    endAt: '2026-01-01T15:20:00.000Z', endOffset: -540,
+    note: 'Finished chapter four.'
+  }, at('2026-01-02T12:00:00Z'));
+  assert.equal(saved.date, '2026-01-01');
+  assert.equal(saved.endDate, '2026-01-02');
+  assert.equal(Date.parse(saved.endAt) - Date.parse(saved.startAt), 35 * 60000);
+  assert.equal(saved.taskId, null);
+  assert.equal(saved.kind, 'quick');
+  assert.equal(state.tasks.length, 0);
+  assert.equal(M.activeEntries(state).length, 0);
+  assert.equal(M.entriesForDate(state, '2026-01-01')[0].id, saved.id);
+  assert.equal(M.entriesForDate(state, '2026-01-02')[0].id, saved.id);
+  assert.equal(M.validateState(clone(state)), true);
+});
+
+test('zero-duration actions and finished timers remain valid explicit records', () => {
+  const state = M.newState();
+  const stamp = '2026-01-01T12:00:00.000Z';
+  const action = M.createManualEntry(state, { title: 'Took creatine', startAt: stamp, startOffset: 0 }, at(stamp));
+  const timer = M.createManualEntry(state, {
+    title: 'A brief pause', tracking: 'timer', startAt: stamp, startOffset: 0, endAt: stamp, endOffset: 0
+  }, at(stamp));
+  assert.equal(action.startAt, action.endAt);
+  assert.equal(timer.startAt, timer.endAt);
+  assert.equal(timer.endAt, stamp);
+  assert.equal(M.activeEntries(state).length, 0);
+  assert.equal(M.validateState(state), true);
+});
+
+test('a running timer can be corrected and finished while retaining its linked identity', () => {
+  const state = M.newState();
+  const task = M.createTask(state, { name: 'Read', kind: 'optional', tracking: 'timer' }, start);
+  const saved = M.startTask(state, task.id, at('2026-01-01T23:00:00Z'));
+  const corrected = M.updateEntry(state, saved.id, {
+    startAt: '2026-01-01T23:10:00.000Z', startOffset: 0,
+    endAt: '2026-01-02T00:20:00.000Z', endOffset: 0,
+    note: 'A late chapter.'
+  }, at('2026-01-02T12:00:00Z'));
+  assert.equal(corrected.id, saved.id);
+  assert.equal(corrected.taskId, task.id);
+  assert.equal(corrected.occurrenceDate, '2026-01-01');
+  assert.equal(corrected.endDate, '2026-01-02');
+  assert.equal(M.activeEntries(state).length, 0);
+  assert.equal(M.validateState(clone(state)), true);
+});
+
+test('invalid manual record values never append a partial record', () => {
+  const state = M.newState();
+  M.logEntry(state, 'Keep this', at('2026-01-01T10:00:00Z'));
+  const before = clone(state), now = at('2026-01-01T12:00:00Z');
+  const base = { title: 'Earlier walk', tracking: 'timer', startAt: '2026-01-01T10:00:00.000Z', startOffset: 0, endAt: '2026-01-01T11:00:00.000Z', endOffset: 0 };
+  for (const changes of [
+    { title: '' }, { title: ' '.repeat(10) }, { note: 'x'.repeat(1001) }, { note: null },
+    { startAt: 0 }, { startAt: 'not a date' }, { startAt: '2026-01-01T13:00:00.000Z' },
+    { endAt: '2026-01-01T13:00:00.000Z' }, { endAt: '2026-01-01T09:00:00.000Z' },
+    { endAt: null }, { startOffset: 841 }, { endOffset: -841 }, { startOffset: 1.5 },
+    { tracking: 'unknown' }
+  ]) {
+    assert.throws(() => M.createManualEntry(state, { ...base, ...changes }, now));
+    assert.deepEqual(state, before);
+  }
+});
+
+test('invalid corrections leave the original timestamps, notes, and task state intact', () => {
+  const state = M.newState();
+  const task = M.createTask(state, { name: 'Read', kind: 'optional', tracking: 'timer' }, start);
+  const saved = M.startTask(state, task.id, at('2026-01-01T10:00:00Z'));
+  M.finishEntry(state, saved.id, at('2026-01-01T11:00:00Z'));
+  const before = clone(state), now = at('2026-01-01T12:00:00Z');
+  for (const changes of [
+    { title: '' }, { note: 'x'.repeat(1001) }, { tracking: 'check' },
+    { startAt: 0 }, { startAt: '2026-01-01T13:00:00.000Z' },
+    { startAt: '2026-01-01T11:30:00.000Z' }, { endAt: '2026-01-01T09:00:00.000Z' },
+    { endAt: '2026-01-01T13:00:00.000Z' }, { startOffset: 999 }, { endOffset: null }
+  ]) {
+    assert.throws(() => M.updateEntry(state, saved.id, changes, now));
+    assert.deepEqual(state, before);
+  }
+});
+
+test('an instant correction rejects separate finish times or conflicting finish offsets', () => {
+  const state = M.newState();
+  const saved = M.logEntry(state, 'Watered plants', at('2026-01-01T10:00:00Z'));
+  const before = clone(state), now = at('2026-01-01T12:00:00Z');
+  for (const changes of [
+    { endAt: '2026-01-01T10:01:00.000Z' },
+    { endAt: null }, { endOffset: -540 }, { tracking: 'timer' }
+  ]) {
+    assert.throws(() => M.updateEntry(state, saved.id, changes, now));
+    assert.deepEqual(state, before);
+  }
+});
+
+test('reopening an older timer cannot create two active sessions for the same task', () => {
+  const state = M.newState();
+  const task = M.createTask(state, { name: 'Read', kind: 'optional', tracking: 'timer' }, start);
+  const first = M.startTask(state, task.id, at('2026-01-01T10:00:00Z'));
+  M.finishEntry(state, first.id, at('2026-01-01T10:30:00Z'));
+  M.startTask(state, task.id, at('2026-01-01T11:00:00Z'));
+  const before = clone(state);
+  assert.throws(() => M.updateEntry(state, first.id, { endAt: null, endOffset: null }, at('2026-01-01T12:00:00Z')));
+  assert.deepEqual(state, before);
+  assert.equal(M.activeEntries(state).length, 1);
+});
+
+test('record metadata remains optional but is validated in restored backups', () => {
+  const state = M.newState();
+  const saved = M.createManualEntry(state, {
+    title: 'A note', startAt: '2026-01-01T10:00:00.000Z', startOffset: 0, note: 'Remember this.'
+  }, at('2026-01-01T12:00:00Z'));
+  assert.equal(M.validateState(state), true);
+  for (const changes of [{ note: 'x'.repeat(1001) }, { note: 42 }, { manual: 'yes' }, { updatedAt: 'invalid' }]) {
+    const corrupted = clone(state);
+    Object.assign(corrupted.entries[0], changes);
+    assert.equal(M.validateState(corrupted), false);
+  }
+  const before = clone(state);
+  assert.throws(() => M.updateEntry(state, saved.id, JSON.parse('{"__proto__":{"polluted":true}}'), at('2026-01-01T13:00:00Z')));
+  assert.deepEqual(state, before);
+  assert.equal({}.polluted, undefined);
+});
