@@ -661,3 +661,23 @@ h1 { font-family: var(--serif); font-size: clamp(36px, 3.7vw, 53px); letter-spac
   .header-actions { flex-wrap:wrap; }
   .create-actions { margin-left:auto; }
 }
+
+/* Fast context and direct scheduling without adding another screen. */
+.schedule-glance { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin:0 0 14px; }
+.schedule-glance-item { display:flex; flex-direction:column; align-items:flex-start; gap:3px; min-width:0; padding:12px 15px; border:1px solid var(--line); border-left:3px solid var(--item-color); border-radius:8px; background:var(--surface); text-align:left; }
+.schedule-glance-item:hover { background:var(--sage-light); }
+.glance-label { color:var(--muted); font-size:9px; letter-spacing:.6px; text-transform:uppercase; }
+.schedule-glance-item strong { width:100%; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.glance-detail { color:var(--muted); font-size:11px; }
+.hour-add { pointer-events:auto; min-height:44px; padding:0 9px 0 0; background:transparent; border:0; border-radius:5px; line-height:1; }
+.hour-add:hover,.hour-add:focus-visible { background:var(--sage-light); color:var(--sage-ink); }
+.hour-add:focus-visible { outline-offset:-2px; }
+.day-canvas { cursor:crosshair; }
+.map-event,.hour-add { cursor:pointer; }
+@media (max-width:760px) {
+  .schedule-glance-item { padding:10px 11px; }
+  .hour-add { padding-right:6px; }
+}
+/* Keep a long block's identity visible while its hours scroll past. */
+.map-event { overflow:clip; }
+.event-label { position:sticky; top:8px; display:flex; flex-direction:column; gap:2px; width:100%; min-width:0; flex-shrink:0; }

@@ -5,6 +5,7 @@ Your schedule and your daily rhythm, together. A private planner for events, rou
 ## The daily loop
 
 - **Events:** use the **+ Event** button for wake-up times, work, sleep, appointments, or anything you want on your schedule. Events appear on the timeline and calendar without a Done button or a place in Your routine. Set a single time, start/end times, or All day. Overnight events continue on the following day.
+- **Quick scheduling:** tap an hour or open space on the timeline to start an event at that time. Earlier end times automatically suggest an overnight event; the preview shows its duration and finish date. Duplicate an event to make a separate one-time copy. Closing an edited event asks before discarding unsaved changes.
 - **Repeating events:** repeat daily, on selected weekdays, every N days, or monthly. Add an optional repeat end date, skip individual dates, and restore skipped dates. Editing changes the whole series, including earlier calendar appearances. Archiving stops today and future occurrences while keeping past dates; restore from Activities.
 - **Colors and details:** give events a color, location, and notes. Activities and recorded moments also have colors. A recorded moment keeps its color when you later change the activity.
 - **Routines:** create an activity such as “Take creatine.” Repeat daily, on selected weekdays, every N days from a start date, or on a day of the month. Monthly dates that do not exist in a shorter month are skipped.
@@ -14,6 +15,7 @@ Your schedule and your daily rhythm, together. A private planner for events, rou
 - **Quick logging:** type something you just did to add it directly to today's timeline with the current time.
 - **Your 24 hours:** explore a full 00:00–24:00 day map. Actions sit at their recorded times, timed sessions span their duration, and planned times have a distinct dashed outline. Overlapping activities stay individually selectable. A live 24-hour clock and Now marker follow today; previous days remain fixed.
 - **Calendar:** browse a month, select a day, and see events, to-dos, and recorded moments together. Below it, review the full 24-hour timeline and search your recorded names and notes. Existing records keep their saved names and times.
+- **Find your plans:** filter the calendar to Events or Recorded, or search the displayed month by name, location, and notes. Monthly totals always describe the full month. The current view, date, and filters survive a reload in the same tab. Today's schedule also shows what's scheduled now and what's next.
 - **Monthly totals:** see planned event time, recorded timer time, and days with saved moments. Planned time excludes all-day events. Overlapping events or timers each contribute their duration; these totals do not claim that a scheduled event was completed.
 - **Fill in the picture:** tap a recorded moment to add a note or correct its name/date/time. Use **Log earlier** to add a missed action or a finished timed activity. Corrections affect that record, not the reusable activity. Future records are rejected; use a plan for future intentions.
 
@@ -61,6 +63,7 @@ The app uses plain JavaScript, CSS, and local PNG icons. No package installation
 node --test tests/*.test.js
 python3 tests/browser_smoke.py
 python3 tests/browser_planner.py
+python3 tests/browser_polish.py
 ```
 
 The browser smoke test requires Python Playwright and Chromium as development tools, and the local server running on port 8000. They are not runtime dependencies of the app.
