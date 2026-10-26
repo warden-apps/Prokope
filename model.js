@@ -75,6 +75,25 @@
     if (typeof value !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) fail('Choose a valid planned time.');
     return value;
   }
+  function minuteOfDay(value) {
+    var parts = value.split(':').map(Number);
+    return parts[0] * 60 + parts[1];
+  }
+  function eventColor(value) {
+    if (value === undefined) return '#55786a';
+    if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) fail('Choose a valid event color.');
+    return value;
+  }
+  function eventLocation(value) {
+    if (value === undefined) return '';
+    if (typeof value !== 'string' || value.length > 160) fail('Keep the location to 160 characters or fewer.');
+    return value.trim();
+  }
+  function excludedDates(value) {
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || value.length > 10000 || value.some(function (key) { return !validDate(key); })) fail('Choose valid dates to skip.');
+    return Array.from(new Set(value)).sort();
+  }
   function id(prefix) {
     var crypto = typeof globalThis !== 'undefined' && globalThis.crypto;
     if (crypto && crypto.randomUUID) return prefix + '_' + crypto.randomUUID();
@@ -90,7 +109,7 @@
     var source = input || {};
     if (!plain(source) || !safeTree(source, 0)) fail('Invalid repeat settings.');
     var type = kind === 'optional' ? 'optional' : kind === 'planned' ? 'once' : source.type || 'daily';
-    if (TYPES.indexOf(type) < 0 || (kind === 'routine' && ['once', 'optional'].indexOf(type) >= 0)) fail('Choose a repeat schedule for this routine.');
+    if (TYPES.indexOf(type) < 0 || (kind === 'routine' && ['once', 'optional'].indexOf(type) >= 0) || (kind === 'event' && type === 'optional')) fail('Choose a valid repeat schedule.');
     var schedule = { type: type, startDate: requireDate(source.startDate || (type === 'once' && source.date) || today), time: time(source.time) };
     if (type === 'weekdays') {
       if (!Array.isArray(source.weekdays)) fail('Select at least one weekday.');
@@ -109,14 +128,35 @@
       schedule.date = requireDate(source.date);
       schedule.startDate = schedule.date;
     }
+    if (kind === 'event') {
+      schedule.endTime = time(source.endTime);
+      if (source.endNextDay !== undefined && typeof source.endNextDay !== 'boolean') fail('Choose whether the event ends the next day.');
+      schedule.endNextDay = source.endNextDay || false;
+      schedule.untilDate = source.untilDate === undefined || source.untilDate === '' ? '' : requireDate(source.untilDate);
+      if (schedule.untilDate && (type === 'once' || schedule.untilDate < schedule.startDate)) fail('The repeat end date must be on or after the start date.');
+      if (schedule.endTime && !schedule.time) fail('Add a start time before an end time.');
+      if (schedule.endNextDay && (!schedule.time || !schedule.endTime)) fail('An overnight event needs start and end times.');
+      if (schedule.endTime) {
+        var duration = minuteOfDay(schedule.endTime) - minuteOfDay(schedule.time) + (schedule.endNextDay ? 1440 : 0);
+        if (duration <= 0 || duration > 1440) fail('Choose an end time after the start, within 24 hours.');
+      }
+    }
     return schedule;
   }
   function normalized(input, today) {
     if (!plain(input) || !safeTree(input, 0)) fail('Invalid activity.');
-    var kind = input.kind || 'routine', tracking = input.tracking || 'check';
-    if (['routine', 'optional', 'planned'].indexOf(kind) < 0) fail('Choose a valid activity type.');
-    if (['check', 'timer'].indexOf(tracking) < 0) fail('Choose completion or timer tracking.');
-    return { name: title(input.name), kind: kind, tracking: tracking, schedule: scheduleFor(input.schedule, kind, today) };
+    var kind = input.kind || 'routine', tracking = input.tracking || (kind === 'event' ? 'none' : 'check');
+    if (['routine', 'optional', 'planned', 'event'].indexOf(kind) < 0) fail('Choose a valid activity type.');
+    if (kind === 'event' ? tracking !== 'none' : ['check', 'timer'].indexOf(tracking) < 0) fail('Events have no completion tracking. Activities use a check or timer.');
+    var result = { name: title(input.name), kind: kind, tracking: tracking, schedule: scheduleFor(input.schedule, kind, today) };
+    if (input.color !== undefined) result.color = eventColor(input.color);
+    if (kind === 'event') {
+      result.color = eventColor(input.color);
+      result.note = note(input.note);
+      result.location = eventLocation(input.location);
+      result.excludedDates = excludedDates(input.excludedDates);
+    }
+    return result;
   }
   function getTask(state, taskId) {
     var task = state.tasks.find(function (item) { return item.id === taskId; });
@@ -157,6 +197,7 @@
     if (!task || !task.schedule || !validDate(key)) return false;
     var schedule = task.schedule;
     if (key < schedule.startDate) return false;
+    if (task.kind === 'event' && ((schedule.untilDate && key > schedule.untilDate) || (task.excludedDates || []).indexOf(key) >= 0)) return false;
     if (task.archivedAt && key >= (task.archivedDate || localDate(task.archivedAt))) return false;
     switch (schedule.type) {
       case 'daily': return true;
@@ -173,12 +214,48 @@
       return (a.schedule.time || '99:99').localeCompare(b.schedule.time || '99:99') || a.createdAt.localeCompare(b.createdAt);
     });
   }
+  function skipEvent(state, taskId, key) {
+    var task = getTask(state, taskId);
+    requireDate(key);
+    if (task.kind !== 'event') fail('Only calendar events can skip a date.');
+    if ((task.excludedDates || []).indexOf(key) >= 0) return task;
+    if (!isDue(task, key)) fail('This event is not scheduled for that date.');
+    task.excludedDates = excludedDates((task.excludedDates || []).concat([key]));
+    return task;
+  }
+  function restoreEventOccurrence(state, taskId, key) {
+    var task = getTask(state, taskId);
+    requireDate(key);
+    if (task.kind !== 'event') fail('Only calendar events have skipped dates.');
+    task.excludedDates = (task.excludedDates || []).filter(function (date) { return date !== key; });
+    return task;
+  }
+  function eventOccurrencesForDate(state, key) {
+    requireDate(key);
+    var previous = key === '0001-01-01' ? null : addDays(key, -1), result = [];
+    state.tasks.forEach(function (task) {
+      if (task.kind !== 'event') return;
+      var schedule = task.schedule;
+      var startMinute = schedule.time ? minuteOfDay(schedule.time) : 0;
+      var endMinute = schedule.endTime ? minuteOfDay(schedule.endTime) : startMinute;
+      if (previous && schedule.endNextDay && endMinute > 0 && isDue(task, previous)) {
+        result.push({ task: task, occurrenceDate: previous, startMinute: 0, endMinute: endMinute, point: false, allDay: false, continuesBefore: true, continuesAfter: false });
+      }
+      if (!isDue(task, key)) return;
+      result.push({ task: task, occurrenceDate: key, startMinute: startMinute,
+        endMinute: !schedule.time || schedule.endNextDay ? 1440 : endMinute,
+        point: !!schedule.time && !schedule.endTime, allDay: !schedule.time,
+        continuesBefore: false, continuesAfter: !!schedule.endNextDay && endMinute > 0 });
+    });
+    return result.sort(function (a, b) { return a.startMinute - b.startMinute || a.task.name.localeCompare(b.task.name) || a.task.id.localeCompare(b.task.id); });
+  }
   function activeEntries(state) { return state.entries.filter(function (entry) { return entry.endAt === null; }); }
   function isCompleted(state, taskId, key) {
     return state.entries.some(function (entry) { return entry.taskId === taskId && entry.endAt !== null && (entry.occurrenceDate || entry.date) === key; });
   }
   function recordingTask(state, taskId, now, occurrenceDate, tracking) {
     var task = getTask(state, taskId), date = dateValue(now), today = localDate(date);
+    if (task.kind === 'event') fail('Calendar events appear on your schedule without completion tracking.');
     if (task.archivedAt) fail('Restore this activity before recording it.');
     if (task.tracking !== tracking) fail(tracking === 'timer' ? 'This activity uses completion tracking.' : 'Start the timer for this activity.');
     var occurrence = occurrenceDate || (task.kind === 'planned' ? task.schedule.date : today);
@@ -200,6 +277,7 @@
       occurrenceDate: occurrence || day,
       startOffset: now.getTimezoneOffset(), endOffset: running ? null : now.getTimezoneOffset()
     };
+    if (task && task.color !== undefined) entry.color = task.color;
     state.entries.push(entry);
     return entry;
   }
@@ -230,6 +308,7 @@
     if (input.tracking !== undefined && input.tracking !== entry.tracking) fail('The recording type cannot be changed.');
     next.title = title(input.title === undefined ? entry.title : input.title);
     next.note = note(input.note === undefined ? entry.note : input.note);
+    if (input.color !== undefined) next.color = eventColor(input.color);
     next.startAt = input.startAt === undefined ? entry.startAt : input.startAt;
     next.startOffset = input.startOffset === undefined ? entry.startOffset : input.startOffset;
     if (!validISO(next.startAt) || !validOffset(next.startOffset)) fail('Choose a valid start time and timezone.');
@@ -311,7 +390,7 @@
       case 'once': label = schedule.date; break;
       default: label = 'Anytime';
     }
-    return label + (schedule.time ? ' · ' + schedule.time : '');
+    return label + (schedule.time ? ' · ' + schedule.time + (task.kind === 'event' && schedule.endTime ? '–' + schedule.endTime + (schedule.endNextDay ? ' (+1 day)' : '') : '') : task.kind === 'event' ? ' · All day' : '') + (task.kind === 'event' && schedule.untilDate ? ' · Until ' + schedule.untilDate : '');
   }
   function validId(value) { return typeof value === 'string' && value.length > 0 && value.length <= 100; }
   function validOffset(value) { return Number.isInteger(value) && value >= -840 && value <= 840; }
@@ -323,7 +402,9 @@
       var validTasks = value.tasks.every(function (task) {
         if (!plain(task) || !validId(task.id) || taskIds.has(task.id) || !validISO(task.createdAt)) return false;
         if (task.name !== title(task.name)) return false;
-        if (['routine', 'optional', 'planned'].indexOf(task.kind) < 0 || ['check', 'timer'].indexOf(task.tracking) < 0) return false;
+        if (task.color !== undefined && task.color !== eventColor(task.color)) return false;
+        if (['routine', 'optional', 'planned', 'event'].indexOf(task.kind) < 0 || (task.kind === 'event' ? task.tracking !== 'none' : ['check', 'timer'].indexOf(task.tracking) < 0)) return false;
+        if (task.kind === 'event' && (task.color !== eventColor(task.color) || task.note !== note(task.note) || task.location !== eventLocation(task.location) || JSON.stringify(task.excludedDates) !== JSON.stringify(excludedDates(task.excludedDates)))) return false;
         if (!plain(task.schedule) || !validDate(task.schedule.startDate)) return false;
         var normalizedSchedule = scheduleFor(task.schedule, task.kind, task.schedule.startDate);
         if (Object.keys(normalizedSchedule).some(function (key) { return JSON.stringify(normalizedSchedule[key]) !== JSON.stringify(task.schedule[key]); })) return false;
@@ -339,6 +420,7 @@
         if (!plain(entry) || !validId(entry.id) || entryIds.has(entry.id)) return false;
         if (entry.title !== title(entry.title) || !validISO(entry.startAt) || !validDate(entry.date) || !validDate(entry.occurrenceDate)) return false;
         if (entry.note !== undefined && (typeof entry.note !== 'string' || entry.note.length > 1000)) return false;
+        if (entry.color !== undefined && entry.color !== eventColor(entry.color)) return false;
         if (entry.manual !== undefined && typeof entry.manual !== 'boolean') return false;
         if (entry.updatedAt !== undefined && !validISO(entry.updatedAt)) return false;
         if (!validOffset(entry.startOffset) || localDateAtOffset(entry.startAt, entry.startOffset) !== entry.date) return false;
@@ -375,6 +457,7 @@
     localDate: localDate, addDays: addDays, newState: newState,
     createTask: createTask, updateTask: updateTask, archiveTask: archiveTask, restoreTask: restoreTask,
     isDue: isDue, tasksForDate: tasksForDate, scheduleLabel: scheduleLabel,
+    eventOccurrencesForDate: eventOccurrencesForDate, skipEvent: skipEvent, restoreEventOccurrence: restoreEventOccurrence,
     completeTask: completeTask, startTask: startTask, finishEntry: finishEntry, logEntry: logEntry,
     createManualEntry: createManualEntry, updateEntry: updateEntry,
     deleteEntry: deleteEntry, entriesForDate: entriesForDate, activeEntries: activeEntries,
