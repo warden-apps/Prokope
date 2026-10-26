@@ -14,8 +14,12 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=3">
   <link rel="icon" type="image/png" href="apple-touch-icon.png?v=3">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="calendar.css">
+  <link rel="stylesheet" href="events.css">
   <script src="model.js" defer></script>
   <script src="timeline.js" defer></script>
+  <script src="calendar.js" defer></script>
+  <script src="events-ui.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -37,12 +41,12 @@
     <aside class="sidebar" aria-label="Application navigation">
       <a class="brand" href="./" aria-label="Prokopē home">
         <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></span>
-        <span><span class="brand-name">Prokopē<span class="brand-period">.</span></span><span class="brand-caption">A DAILY PRACTICE</span></span>
+        <span><span class="brand-name">Prokopē<span class="brand-period">.</span></span><span class="brand-caption">YOUR PERSONAL PLANNER</span></span>
       </a>
       <nav class="primary-nav" aria-label="Main">
         <button type="button" class="nav-item is-active" data-view="today" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg><span>Today</span><span class="nav-indicator" aria-hidden="true"></span></button>
         <button type="button" class="nav-item" data-view="library"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg><span>Activities</span><span class="nav-indicator" aria-hidden="true"></span></button>
-        <button type="button" class="nav-item" data-view="history"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><span>History</span><span class="nav-indicator" aria-hidden="true"></span></button>
+        <button type="button" class="nav-item" data-view="history"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><span>Calendar</span><span class="nav-indicator" aria-hidden="true"></span></button>
       </nav>
       <div class="sidebar-note" aria-hidden="true">
         <svg class="icon" aria-hidden="true"><use href="#i-leaf"/></svg>
@@ -57,8 +61,8 @@
 
     <main id="main" class="main" tabindex="-1">
       <header class="page-header">
-        <div class="header-copy"><p class="eyebrow">A LITTLE, EVERY DAY</p><h1 id="view-title">A day, well spent.</h1><p id="view-subtitle" class="page-subtitle">The things you intend. The things you do.</p></div>
-        <div class="header-actions"><div class="live-clock" aria-label="Current local time"><time id="live-clock-value" class="live-clock-value">00:00:00</time><span class="live-clock-caption">YOUR LOCAL TIME</span></div><button type="button" class="button primary-button" id="add-task"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>New activity</span></button></div>
+        <div class="header-copy"><p class="eyebrow">YOUR DAY, IN ONE PLACE</p><h1 id="view-title">A day, well spent.</h1><p id="view-subtitle" class="page-subtitle">The things you intend. The things you do.</p></div>
+        <div class="header-actions"><div class="live-clock" aria-label="Current local time"><time id="live-clock-value" class="live-clock-value">00:00:00</time><span class="live-clock-caption">YOUR LOCAL TIME</span></div><div class="create-actions"><button type="button" class="button secondary-button" id="add-event"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>Event</span></button><button type="button" class="button primary-button" id="add-task"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>Activity</span></button></div></div>
       </header>
       <div id="storage-warning" class="notice notice-warning" role="alert" hidden></div>
       <div id="update-banner" class="notice notice-update" hidden><span>A fresh version is ready when you are.</span><button type="button" class="text-button" id="apply-update">Update app <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></div>
@@ -80,24 +84,24 @@
             <form id="quick-log-form" class="quick-log-form">
               <label for="quick-log-name"><span class="quick-log-star" aria-hidden="true">✳</span> Just did something?</label>
               <div class="quick-log-fields"><input type="text" id="quick-log-name" maxlength="120" required placeholder="A walk, a good chapter, a small win…" autocomplete="off"><button type="submit" class="quick-log-button">Log now <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></div>
-              <p>Write it down. We’ll remember the time.</p>
+
             </form>
             <section class="task-section" aria-labelledby="routine-heading">
-              <div class="section-heading"><div><span class="section-kicker">THE EVERYDAY THINGS</span><h2 id="routine-heading">Your routine <span id="routine-count" class="section-count"></span></h2></div><span class="section-symbol" aria-hidden="true">↻</span></div>
+              <div class="section-heading"><div><span class="section-kicker">CHECK IT OFF</span><h2 id="routine-heading">Your routine <span id="routine-count" class="section-count"></span></h2></div><span class="section-symbol" aria-hidden="true">↻</span></div>
               <div id="routine-list" class="task-list"></div>
             </section>
             <section class="task-section" aria-labelledby="planned-heading">
-              <div class="section-heading"><div><span class="section-kicker">A LITTLE INTENTION</span><h2 id="planned-heading">On the calendar <span id="planned-count" class="section-count"></span></h2></div><svg class="icon section-symbol" aria-hidden="true"><use href="#i-clock"/></svg></div>
+              <div class="section-heading"><div><span class="section-kicker">ONCE, WHEN YOU NEED IT</span><h2 id="planned-heading">To do <span id="planned-count" class="section-count"></span></h2></div><svg class="icon section-symbol" aria-hidden="true"><use href="#i-clock"/></svg></div>
               <div id="planned-list" class="task-list"></div>
             </section>
             <section class="task-section" aria-labelledby="optional-heading">
-              <div class="section-heading"><div><span class="section-kicker">NO PRESSURE, JUST POSSIBILITY</span><h2 id="optional-heading">Whenever you feel like it</h2></div><svg class="icon section-symbol" aria-hidden="true"><use href="#i-leaf"/></svg></div>
+              <div class="section-heading"><div><span class="section-kicker">ANYTIME</span><h2 id="optional-heading">Whenever</h2></div><svg class="icon section-symbol" aria-hidden="true"><use href="#i-leaf"/></svg></div>
               <div id="optional-list" class="task-list"></div>
             </section>
           </div>
           <aside class="timeline-panel day-map-card" id="today-map-panel" aria-labelledby="timeline-heading">
             <div class="day-map-heading"><div><p class="section-kicker" id="timeline-date">TODAY, HOUR BY HOUR</p><h2 id="timeline-heading">Your 24 hours.</h2></div><div class="day-map-tools"><button class="map-jump text-button" data-action="jump-now" data-map="today">Now</button><button class="map-jump text-button" data-action="jump-first" data-map="today">First entry</button></div></div>
-            <div class="map-legend"><span class="legend-recorded">Recorded</span><span class="legend-planned">Planned</span><span class="legend-running">In progress</span></div>
+            <div class="map-legend"><span class="legend-event">Events</span><span class="legend-recorded">Recorded</span><span class="legend-planned">Planned</span><span class="legend-running">In progress</span></div>
             <div id="timeline-list" class="day-map-body"></div>
             <p class="day-map-footer">00:00 → 24:00 · Tap a moment for details. Scroll to explore.</p>
           </aside>
@@ -105,16 +109,18 @@
       </section>
 
       <section id="library-view" aria-labelledby="library-heading" hidden>
-        <div class="library-intro"><div><h2 id="library-heading">Make it your own.</h2><p>Small routines, things to look forward to, and room for the unplanned.</p></div><label class="archive-toggle"><input type="checkbox" id="show-archived"><span>Show archived</span></label></div>
+        <div class="library-intro"><div><h2 id="library-heading">Make it your own.</h2><p>Events, routines, and things to do.</p></div><label class="archive-toggle"><input type="checkbox" id="show-archived"><span>Show archived</span></label></div>
         <div id="library-list" class="library-list"></div>
       </section>
 
       <section id="history-view" aria-labelledby="history-heading" hidden>
-        <div class="history-intro-row"><div><p class="section-kicker">EVERY HOUR HAS A STORY</p><h2 id="history-heading" class="history-heading">A day in full.</h2><p class="history-intro">Your actual times, from midnight to midnight. Choose a date above to look back.</p></div><button class="secondary-button button" data-action="log-earlier">+ Add a missed moment</button></div>
+        <h2 id="history-heading" class="sr-only">Calendar</h2>
+        <div id="calendar-panel"></div>
+        <div class="calendar-day-heading"><h2>Your day in detail</h2><button class="text-button" data-action="log-earlier">+ Log earlier</button></div>
         <div id="history-summary" class="day-summary"></div>
         <div class="history-layout">
-          <section class="day-map-card" aria-label="24-hour history"><div class="day-map-heading"><div><p class="section-kicker">THE WHOLE DAY</p><h2 id="history-map-date">Your 24 hours</h2></div><div class="day-map-tools"><button class="map-jump text-button" data-action="jump-now" data-map="history">Now</button><button class="map-jump text-button" data-action="jump-first" data-map="history">First entry</button></div></div><div class="map-legend"><span class="legend-recorded">Recorded</span><span class="legend-planned">Planned</span><span class="legend-running">In progress</span></div><div id="history-timeline" class="day-map-body"></div><p class="day-map-footer">Times stay as recorded, even when you travel.</p></section>
-          <section class="history-records-panel"><div class="section-heading"><h2>The details</h2></div><label class="history-search-label" for="history-search">Find a moment across your days</label><input type="search" id="history-search" placeholder="Search activities or notes…" maxlength="160"><p id="history-results-count" class="field-hint" role="status"></p><div id="history-records" class="record-results"></div></section>
+          <section class="day-map-card" aria-label="24-hour history"><div class="day-map-heading"><div><p class="section-kicker">THE WHOLE DAY</p><h2 id="history-map-date">Your 24 hours</h2></div><div class="day-map-tools"><button class="map-jump text-button" data-action="jump-now" data-map="history">Now</button><button class="map-jump text-button" data-action="jump-first" data-map="history">First entry</button></div></div><div class="map-legend"><span class="legend-event">Events</span><span class="legend-recorded">Recorded</span><span class="legend-planned">Planned</span><span class="legend-running">In progress</span></div><div id="history-timeline" class="day-map-body"></div><p class="day-map-footer">Times stay as recorded, even when you travel.</p></section>
+          <section class="history-records-panel"><div class="section-heading"><h2>Recorded</h2></div><label class="history-search-label" for="history-search">Search your records</label><input type="search" id="history-search" placeholder="Search activities or notes…" maxlength="160"><p id="history-results-count" class="field-hint" role="status"></p><div id="history-records" class="record-results"></div></section>
         </div>
       </section>
       <footer class="main-footer"><span>Prokopē · progress, one day at a time</span><span>Made for the life you actually live.</span></footer>
@@ -140,6 +146,7 @@
       </div>
       <div id="planned-date-field" class="field" hidden><label for="task-date">On which day?</label><input type="date" id="task-date"></div>
       <div id="time-field" class="field"><label for="task-time">Planned time <span class="label-optional">optional</span></label><input type="time" id="task-time"><p class="field-hint">A place in your day, not a notification. Your actual time is recorded separately.</p></div>
+      <div class="field color-field"><label for="task-color">Color</label><input type="color" id="task-color" value="#55786a"></div>
       <p id="task-error" class="form-error" role="alert" hidden></p>
       <div class="modal-footer"><button type="button" class="text-button danger-text" id="task-archive" hidden>Archive activity</button><button type="submit" class="button primary-button">Save activity <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></div>
     </form>
@@ -163,6 +170,7 @@
       <div class="field" id="record-tracking-field"><label for="record-tracking">Type of record</label><select id="record-tracking"><option value="check">A single moment</option><option value="timer">Time spent on something</option></select></div>
       <div class="field-grid record-grid"><div class="field"><label for="record-date">Date</label><input type="date" id="record-date" required></div><div class="field"><label for="record-start" id="record-start-label">Time · 24-hour</label><input type="time" id="record-start" step="1" required></div></div>
       <div class="field-grid record-grid" id="record-end-fields"><div class="field"><label for="record-end-date">Finish date</label><input type="date" id="record-end-date"></div><div class="field"><label for="record-end">Finish time · 24-hour</label><input type="time" id="record-end" step="1"></div></div>
+      <div class="field color-field"><label for="record-color">Color</label><input type="color" id="record-color" value="#55786a"></div>
       <div class="field"><label for="record-note">A note <span class="label-optional">optional</span></label><textarea id="record-note" rows="3" maxlength="1000" placeholder="Anything you’d like to remember."></textarea></div>
       <p id="record-error" class="form-error" role="alert" hidden></p>
       <div class="modal-footer"><button type="button" class="text-button danger-text" id="record-delete">Remove record</button><button type="submit" class="button primary-button" id="record-save">Save changes</button></div>

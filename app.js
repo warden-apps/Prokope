@@ -11,6 +11,21 @@
   var confirmResolve = null, restoreBusy = false;
   var clockMinute = '', recordOriginal = null;
   var mapDates = { today: '', history: '' };
+  var calendarMonth = selected.slice(0, 7) + '-01', calendarSelected = selected;
+  var eventEditor = window.ProkopeEvents.init({
+    getState: function () { return state; }, getDate: function () { return selected; },
+    transact: transact, toast: toast, confirm: confirmAction,
+    onCreated: function (task) {
+      var date = task.schedule.date || (task.schedule.startDate > selected ? task.schedule.startDate : selected);
+      // Open the next occurrence so a newly saved future event is easy to find.
+      for (var i = 0; task.schedule.type !== 'once' && !M.isDue(task, date) && i < 62; i++) {
+        if (task.schedule.untilDate && date >= task.schedule.untilDate) break;
+        try { date = M.addDays(date, 1); } catch (_) { break; }
+      }
+      if (date !== selected) { selected = date; view = 'history'; }
+      render();
+    }
+  });
 
   function escape(value) {
     return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -150,7 +165,14 @@
   function actionButton(action, id, text, type, extra) {
     return '<button class="' + (type || 'action-button') + '" data-action="' + action + '" data-id="' + escape(id) + '"' + (extra || '') + '>' + text + '</button>';
   }
+  function itemColor(item) {
+    return item && /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : '#55786a';
+  }
+  function eventCard(task) {
+    return '<article class="task-card library-card"><span class="event-color-dot" style="--item-color:' + itemColor(task) + '"></span><div class="task-content"><h3 class="task-name">' + escape(task.name) + '</h3><p class="task-meta">' + escape(scheduleText(task)) + (task.archivedAt ? ' · Archived' : '') + '</p></div>' + actionButton('edit-event', task.id, icon('edit'), 'icon-button', ' aria-label="Edit ' + escape(task.name) + '"') + '</article>';
+  }
   function taskCard(task, library) {
+    if (task.kind === 'event') return eventCard(task);
     var occurrence = task.kind === 'planned' ? task.schedule.date : selected;
     var active = M.activeEntries(state).find(function (entry) { return entry.taskId === task.id; });
     var entry = task.kind === 'optional' ? null : taskEntry(task, occurrence);
@@ -172,7 +194,7 @@
       } else if (!library && selected < today) actions += '<span class="muted">Not recorded</span>';
       actions += actionButton('edit', task.id, icon('edit'), 'icon-button', ' aria-label="Edit ' + escape(task.name) + '"');
     }
-    return '<article class="task-card' + (library ? ' library-card' : '') + (done ? ' is-done' : '') + (active ? ' is-running' : '') + '"><div class="task-icon ' + task.kind + '">' + icon(task.kind) + '</div><div class="task-content"><h3 class="task-name">' + escape(task.name) + '</h3><p class="task-meta">' + escape(meta) + (task.archivedAt ? ' · Archived' : '') + '</p></div><div class="task-actions">' + actions + '</div></article>';
+    return '<article class="task-card' + (library ? ' library-card' : '') + (done ? ' is-done' : '') + (active ? ' is-running' : '') + '"><div class="task-icon ' + task.kind + '" style="color:' + itemColor(task) + '">' + icon(task.kind) + '</div><div class="task-content"><h3 class="task-name">' + escape(task.name) + '</h3><p class="task-meta">' + escape(meta) + (task.archivedAt ? ' · Archived' : '') + '</p></div><div class="task-actions">' + actions + '</div></article>';
   }
   function recordList(entries, allDays) {
     if (!entries.length) return empty(selected > today ? 'A little space for tomorrow.' : 'Your day is still unfolding.', selected > today ? 'Planned activities will appear in your daily list. Actual times are recorded when you do them.' : 'Complete an activity or log a moment. Its time will appear here automatically.');
@@ -186,61 +208,72 @@
       if (entry.endAt === null) actions += actionButton('finish', entry.id, 'Finish', 'text-button');
       if (allDays) actions += actionButton('visit-entry', entry.id, dateLabel(entry.date, { month: 'short', day: 'numeric', year: 'numeric' }), 'text-button', ' data-date="' + entry.date + '"');
       actions += actionButton('remove-entry', entry.id, icon('remove'), 'icon-button', ' aria-label="Remove record for ' + escape(entry.title) + '"');
-      return '<article class="timeline-item' + (entry.endAt === null ? ' is-running' : '') + '"><time class="timeline-time" datetime="' + entry.startAt + '">' + escape(clock(entry.startAt, entry.startOffset)) + '</time><span class="timeline-dot"></span><div class="timeline-content"><h3 class="timeline-title">' + escape(entry.title) + '</h3><p class="timeline-detail">' + escape(label) + '</p>' + (entry.note ? '<p class="entry-detail-note">' + escape(entry.note) + '</p>' : '') + '</div><div class="timeline-actions">' + actions + '</div></article>';
+      return '<article class="timeline-item' + (entry.endAt === null ? ' is-running' : '') + '"><time class="timeline-time" datetime="' + entry.startAt + '">' + escape(clock(entry.startAt, entry.startOffset)) + '</time><span class="timeline-dot" style="background:' + itemColor(entry) + '"></span><div class="timeline-content"><h3 class="timeline-title">' + escape(entry.title) + '</h3><p class="timeline-detail">' + escape(label) + '</p>' + (entry.note ? '<p class="entry-detail-note">' + escape(entry.note) + '</p>' : '') + '</div><div class="timeline-actions">' + actions + '</div></article>';
     }).join('');
   }
   function minuteLabel(minute) {
     if (minute >= 1440) return '24:00';
     return String(Math.floor(minute / 60)).padStart(2, '0') + ':' + String(Math.floor(minute % 60)).padStart(2, '0');
   }
-  function dayMap(containerId, name, entries, due) {
-    var container = $(containerId), previous = container.querySelector('.day-scroll');
-    var scrollTop = previous && mapDates[name] === selected ? previous.scrollTop : null;
-    var focus = container.contains(document.activeElement) ? document.activeElement.dataset.entryId || document.activeElement.dataset.taskId || '' : '';
+  function dayItems(entries, due) {
     var items = [];
     entries.forEach(function (entry) {
       var segment = T.segment(entry, selected);
       if (segment) items.push(Object.assign(segment, { entry: entry }));
     });
     due.forEach(function (task) {
-      if (!task.schedule.time || !M.isDue(task, selected) || taskEntry(task, task.kind === 'planned' ? task.schedule.date : selected)) return;
+      if (task.kind === 'event' || !task.schedule.time || !M.isDue(task, selected) || taskEntry(task, task.kind === 'planned' ? task.schedule.date : selected)) return;
       var parts = task.schedule.time.split(':').map(Number), minute = parts[0] * 60 + parts[1];
       items.push({ id: task.id, task: task, startMinute: minute, endMinute: minute, point: true });
     });
-    var positioned = T.layout(items, 46);
+    M.eventOccurrencesForDate(state, selected).forEach(function (occurrence) {
+      if (!occurrence.allDay) items.push(Object.assign({}, occurrence, { id: occurrence.task.id + ':' + occurrence.occurrenceDate, event: true }));
+    });
+    return items;
+  }
+  function dayMap(containerId, name, entries, due) {
+    var container = $(containerId), previous = container.querySelector('.day-scroll');
+    var scrollTop = previous && mapDates[name] === selected ? previous.scrollTop : null;
+    var focused = container.contains(document.activeElement) ? document.activeElement : null;
+    var focus = focused && (focused.dataset.entryId || focused.dataset.taskId || '');
+    var focusDate = focused && focused.dataset.date;
+    var items = dayItems(entries, due), positioned = T.layout(items, 46);
     var hours = Array.from({ length: 25 }, function (_, hour) {
       return '<div class="hour-row" style="top:calc(24px + var(--day-height) * ' + hour / 24 + ')"><span class="hour-label">' + String(hour).padStart(2, '0') + ':00</span><span class="hour-rule"></span></div>';
     }).join('');
     var marks = positioned.map(function (item) {
-      var entry = item.entry, planned = !!item.task;
+      var entry = item.entry, planned = !!item.task, event = !!item.event;
       var title = planned ? item.task.name : entry.title;
-      var times = planned ? item.task.schedule.time + ' · Planned' : clock(entry.startAt, entry.startOffset);
-      var detail = planned ? 'Not recorded' : item.point ? 'Recorded' : entry.endAt ? clock(entry.startAt, entry.startOffset) + '–' + clock(entry.endAt, entry.endOffset) + ' · ' + elapsed(entry) : 'In progress · ' + elapsed(entry);
+      var times = planned ? item.task.schedule.time : clock(entry.startAt, entry.startOffset);
+      if (event && item.task.schedule.endTime) times += '–' + item.task.schedule.endTime + (item.task.schedule.endNextDay ? ' +1d' : '');
+      else if (planned) times += ' · Planned';
+      var detail = event ? item.task.location || 'Scheduled' : planned ? 'Not recorded' : item.point ? 'Recorded' : entry.endAt ? clock(entry.startAt, entry.startOffset) + '–' + clock(entry.endAt, entry.endOffset) + ' · ' + elapsed(entry) : 'In progress · ' + elapsed(entry);
       if (item.continuesBefore) times = '00:00 · Continued';
-      if (item.continuesAfter && !planned) detail += ' · Continues past midnight';
+      if (item.continuesAfter) detail += ' · Continues past midnight';
       if (item.clockShift) detail += ' · Clock changed';
-      var classes = (planned ? ' is-planned' : item.point ? ' is-point' : ' is-timer') + (item.running ? ' is-running' : '');
+      var classes = (event ? ' is-event' : planned ? ' is-planned' : item.point ? ' is-point' : ' is-timer') + (item.running ? ' is-running' : '');
       var span = item.displayEnd - item.displayStart;
       var shortTimer = !planned && !item.point && item.endMinute - item.startMinute < 46;
-      if (shortTimer) {
-        classes += ' is-short';
-        times += ' · ' + elapsed(entry);
-      }
+      if (shortTimer) { classes += ' is-short'; times += ' · ' + elapsed(entry); }
       var durationBar = shortTimer ? '<span class="event-duration-bar" style="top:' + (item.startMinute - item.displayStart) / span * 100 + '%;height:' + Math.max(1, (item.endMinute - item.startMinute) / span * 100) + '%"></span>' : '';
-      var attrs = planned ? ' data-action="edit" data-id="' + escape(item.task.id) + '" data-task-id="' + escape(item.task.id) + '"' : ' data-action="edit-entry" data-id="' + escape(entry.id) + '" data-entry-id="' + escape(entry.id) + '"';
-      return '<button type="button" class="map-event' + classes + '"' + attrs + ' data-start-minute="' + item.startMinute + '" data-end-minute="' + item.endMinute + '" style="top:' + item.displayStart / 1440 * 100 + '%;height:' + span / 1440 * 100 + '%;left:' + item.lane / item.lanes * 100 + '%;width:calc(' + 100 / item.lanes + '% - 5px)" aria-label="' + escape(title + ' · ' + times + ' · ' + detail) + '">' + durationBar + '<span class="event-anchor" style="top:' + Math.min(98, Math.max(0, (item.startMinute - item.displayStart) / span * 100)) + '%"></span><span class="event-clock">' + escape(times) + '</span><span class="event-title">' + escape(title) + '</span>' + (!item.point && span >= 76 ? '<span class="event-duration">' + escape(detail) + '</span>' : '') + '</button>';
+      var attrs = planned ? ' data-action="' + (event ? 'edit-event' : 'edit') + '" data-id="' + escape(item.task.id) + '" data-task-id="' + escape(item.task.id) + '"' + (event ? ' data-date="' + item.occurrenceDate + '"' : '') : ' data-action="edit-entry" data-id="' + escape(entry.id) + '" data-entry-id="' + escape(entry.id) + '"';
+      return '<button type="button" class="map-event' + classes + '"' + attrs + ' data-start-minute="' + item.startMinute + '" data-end-minute="' + item.endMinute + '" style="--item-color:' + itemColor(item.task || entry) + ';top:' + item.displayStart / 1440 * 100 + '%;height:' + span / 1440 * 100 + '%;left:' + item.lane / item.lanes * 100 + '%;width:calc(' + 100 / item.lanes + '% - 5px)" aria-label="' + escape(title + ' · ' + times + ' · ' + detail) + '">' + durationBar + '<span class="event-anchor" style="top:' + Math.min(98, Math.max(0, (item.startMinute - item.displayStart) / span * 100)) + '%"></span><span class="event-clock">' + escape(times) + '</span><span class="event-title">' + escape(title) + '</span>' + (!item.point && span >= 76 ? '<span class="event-duration">' + escape(detail) + '</span>' : '') + '</button>';
     }).join('');
     var mini = positioned.map(function (item) {
-      return '<button type="button" class="overview-mark' + (item.task ? ' is-planned' : '') + (item.running ? ' is-running' : '') + '" style="left:' + item.startMinute / 1440 * 100 + '%;width:max(3px,' + Math.max(0, item.endMinute - item.startMinute) / 1440 * 100 + '%)" data-action="jump-minute" data-map="' + name + '" data-minute="' + item.startMinute + '" aria-label="Jump to ' + escape(minuteLabel(item.startMinute) + ': ' + (item.task ? item.task.name : item.entry.title)) + '"></button>';
+      return '<button type="button" class="overview-mark' + (item.task && !item.event ? ' is-planned' : '') + (item.running ? ' is-running' : '') + '" style="--item-color:' + itemColor(item.task || item.entry) + ';left:' + item.startMinute / 1440 * 100 + '%;width:max(3px,' + Math.max(0, item.endMinute - item.startMinute) / 1440 * 100 + '%)" data-action="jump-minute" data-map="' + name + '" data-minute="' + item.startMinute + '" aria-label="Jump to ' + escape(minuteLabel(item.startMinute) + ': ' + (item.task ? item.task.name : item.entry.title)) + '"></button>';
     }).join('');
+    var allDay = M.eventOccurrencesForDate(state, selected).filter(function (item) { return item.allDay; });
+    var allDayHTML = allDay.length ? '<div class="map-all-day"><span>All day</span><div>' + allDay.map(function (item) {
+      return '<button type="button" class="all-day-event" style="--item-color:' + itemColor(item.task) + '" data-action="edit-event" data-id="' + escape(item.task.id) + '" data-task-id="' + escape(item.task.id) + '" data-date="' + item.occurrenceDate + '">' + escape(item.task.name) + '</button>';
+    }).join('') + '</div></div>' : '';
     var now = selected === today ? '<div class="now-line" style="top:' + T.minutesAt(new Date()) / 1440 * 100 + '%"><span>Now ' + clock(new Date()) + '</span></div>' : '';
-    container.innerHTML = '<div class="day-overview" aria-label="Whole-day overview">' + mini + (selected === today ? '<span class="overview-now" style="left:' + T.minutesAt(new Date()) / 1440 * 100 + '%"></span>' : '') + '</div><div class="overview-labels" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div><div class="day-scroll" data-map="' + name + '" tabindex="0" role="region" aria-label="' + escape(dateLabel(selected)) + ', 00:00 to 24:00; scroll to explore"><div class="day-canvas" style="--day-height:1440px">' + hours + '<div class="map-lanes">' + marks + now + '</div></div></div>' + (!items.length ? '<p class="map-empty-hint">' + (selected > today ? 'An open day. Give a plan a time to place it here.' : 'No moments recorded yet. Your first one will find its place here.') + '</p>' : '');
+    container.innerHTML = allDayHTML + '<div class="day-overview" aria-label="Whole-day overview">' + mini + (selected === today ? '<span class="overview-now" style="left:' + T.minutesAt(new Date()) / 1440 * 100 + '%"></span>' : '') + '</div><div class="overview-labels" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div><div class="day-scroll" data-map="' + name + '" tabindex="0" role="region" aria-label="' + escape(dateLabel(selected)) + ', 00:00 to 24:00; scroll to explore"><div class="day-canvas" style="--day-height:1440px">' + hours + '<div class="map-lanes">' + marks + now + '</div></div></div>' + (!items.length && !allDay.length ? '<div class="map-empty-hint">An open day. <button class="text-button" data-action="new-event">+ Add an event</button></div>' : '');
     var scroller = container.querySelector('.day-scroll');
     if (scrollTop !== null) scroller.scrollTop = scrollTop;
     else scroller.scrollTop = Math.max(0, (selected === today ? T.minutesAt(new Date()) - 120 : positioned.length ? positioned[0].startMinute - 60 : 0));
     mapDates[name] = selected;
     if (focus) {
-      var target = Array.from(container.querySelectorAll('.map-event')).find(function (button) { return button.dataset.entryId === focus || button.dataset.taskId === focus; });
+      var target = Array.from(container.querySelectorAll('[data-entry-id], [data-task-id]')).find(function (button) { return (button.dataset.entryId === focus || button.dataset.taskId === focus) && button.dataset.date === focusDate; });
       if (target) target.focus({ preventScroll: true });
     }
   }
@@ -250,7 +283,7 @@
     dayMap('history-timeline', 'history', entries, due);
     $('history-map-date').textContent = dateLabel(selected, { month: 'long', day: 'numeric' });
     document.querySelectorAll('[data-action="jump-now"]').forEach(function (button) { button.hidden = selected !== today; });
-    document.querySelectorAll('[data-action="jump-first"]').forEach(function (button) { button.disabled = !entries.length; });
+    document.querySelectorAll('[data-action="jump-first"]').forEach(function (button) { button.disabled = !dayItems(entries, due).length; });
   }
   function renderHistory() {
     var query = $('history-search').value.trim().toLocaleLowerCase();
@@ -263,6 +296,7 @@
     if (scroller) scroller.scrollTo({ top: Math.max(0, minute - 110), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
   function summary(entries, due) {
+    due = due.filter(function (task) { return task.kind !== 'event'; });
     var completed = due.filter(function (task) { return !!(taskEntry(task, task.kind === 'planned' ? task.schedule.date : selected) || {}).endAt; }).length;
     var finished = entries.filter(function (entry) { return entry.endAt; }).length;
     var seconds = T.dayDuration(entries, selected);
@@ -273,7 +307,7 @@
     var weekDay = dateObject(selected).getDay();
     var monday = M.addDays(selected, -(weekDay + 6) % 7);
     $('week-strip').innerHTML = Array.from({ length: 7 }, function (_, i) {
-      var date = M.addDays(monday, i), hasEntries = M.entriesForDate(state, date).length > 0;
+      var date = M.addDays(monday, i), hasEntries = M.entriesForDate(state, date).length > 0 || M.eventOccurrencesForDate(state, date).length > 0;
       return '<button class="week-day' + (date === selected ? ' is-selected' : '') + (date === today ? ' is-today' : '') + '" data-action="day" data-date="' + date + '" aria-label="' + escape(dateLabel(date)) + '" aria-pressed="' + (date === selected) + '"><span class="week-name">' + escape(dateLabel(date, { weekday: 'short' })) + '</span><span class="week-number">' + Number(date.slice(-2)) + '</span><span class="week-dot' + (hasEntries ? ' has-entries' : '') + '"></span></button>';
     }).join('');
   }
@@ -283,7 +317,7 @@
     }).join('');
   }
   function dailyTasks(date) {
-    var due = M.tasksForDate(state, date);
+    var due = M.tasksForDate(state, date).filter(function (task) { return task.kind !== 'event'; });
     if (date === today) {
       state.tasks.forEach(function (task) {
         if (task.kind === 'planned' && !task.archivedAt && task.schedule.date < today && !taskEntry(task, task.schedule.date)) due.push(task);
@@ -299,8 +333,8 @@
       if (button.dataset.view === view) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
     });
     $('day-navigation').hidden = view === 'library';
-    $('view-title').textContent = view === 'library' ? 'Make it your own.' : view === 'history' ? 'The days add up.' : selected === today ? 'A day, well spent.' : selected > today ? 'A little planning ahead.' : 'A day to look back on.';
-    $('view-subtitle').textContent = view === 'library' ? 'Your routines, plans, and things you love to do.' : dateLabel(selected) + (selected === today ? ' · Today' : selected === M.addDays(today, -1) ? ' · Yesterday' : '');
+    $('view-title').textContent = view === 'library' ? 'Activities' : view === 'history' ? 'Calendar' : selected === today ? 'Today, at a glance.' : selected > today ? 'A little planning ahead.' : 'A day to look back on.';
+    $('view-subtitle').textContent = view === 'library' ? 'Your events, routines, and things to do.' : dateLabel(selected) + (selected === today ? ' · Today' : selected === M.addDays(today, -1) ? ' · Yesterday' : '');
     renderDays();
     renderActive();
     var due = dailyTasks(selected);
@@ -312,16 +346,19 @@
     $('history-summary').innerHTML = summary(entries, due);
     $('routine-count').textContent = String(routines.length).padStart(2, '0');
     $('planned-count').textContent = String(planned.length).padStart(2, '0');
-    $('routine-list').innerHTML = routines.length ? routines.map(function (task) { return taskCard(task); }).join('') : empty('Small things, done consistently.', 'Add the things you want to keep coming back to. A supplement, a walk, a little practice.', addButton('routine', 'Create a routine'));
-    $('planned-list').innerHTML = planned.length ? planned.map(function (task) { return taskCard(task); }).join('') : empty('Nothing on the calendar.', 'Give a one-time task a day and, if you like, a time.', addButton('planned', 'Plan something'));
-    $('optional-list').innerHTML = optional.length ? optional.map(function (task) { return taskCard(task); }).join('') : empty('Leave room for a little spontaneity.', 'Keep a list of things you enjoy. Do them when it feels right, with no streak to keep.', addButton('optional', 'Add an optional activity'));
+    $('routine-list').innerHTML = routines.length ? routines.map(function (task) { return taskCard(task); }).join('') : empty('No routines yet.', 'Repeat the things you want to do.', addButton('routine', 'Create a routine'));
+    $('planned-list').innerHTML = planned.length ? planned.map(function (task) { return taskCard(task); }).join('') : empty('Nothing to do here yet.', 'Give a one-time task a date.', addButton('planned', 'Plan something'));
+    $('optional-list').innerHTML = optional.length ? optional.map(function (task) { return taskCard(task); }).join('') : empty('Room for something spontaneous.', 'Keep activities here for whenever you feel like it.', addButton('optional', 'Add an optional activity'));
     $('quick-log-form').hidden = selected !== today;
     $('timeline-date').textContent = selected === today ? 'TODAY’S TIMELINE' : dateLabel(selected, { month: 'short', day: 'numeric' }).toUpperCase();
     renderMaps();
     renderHistory();
+    if (calendarSelected !== selected) { calendarMonth = selected.slice(0, 7) + '-01'; calendarSelected = selected; }
+    $('week-strip').hidden = view === 'history';
+    window.ProkopeCalendar.render($('calendar-panel'), { state: state, selected: selected, today: today, month: calendarMonth });
     var libraryTasks = state.tasks.filter(function (task) { return $('show-archived').checked || !task.archivedAt; });
     var library = '';
-    [['routine', 'Routines'], ['planned', 'Planned tasks'], ['optional', 'Optional activities']].forEach(function (group) {
+    [['event', 'Events'], ['routine', 'Routines'], ['planned', 'Planned tasks'], ['optional', 'Optional activities']].forEach(function (group) {
       var tasks = libraryTasks.filter(function (task) { return task.kind === group[0]; });
       library += '<section class="library-group"><div class="section-heading"><h2>' + group[1] + '</h2>' + addButton(group[0], 'Add') + '</div>' + (tasks.length ? tasks.map(function (task) { return taskCard(task, true); }).join('') : empty('A space for your ' + group[1].toLowerCase() + '.', 'Start with one. You can always add more.')) + '</section>';
     });
@@ -352,10 +389,12 @@
   }
   function openTask(taskId, kind) {
     var task = state.tasks.find(function (item) { return item.id === taskId; });
+    if (kind === 'event' || task && task.kind === 'event') { eventEditor.open(taskId, selected); return; }
     $('task-form').reset();
     $('task-id').value = task ? task.id : '';
     $('task-dialog-title').textContent = task ? 'A little adjustment.' : 'Make space for something.';
     $('task-name').value = task ? task.name : '';
+    $('task-color').value = itemColor(task);
     $('task-kind').value = task ? task.kind : kind || 'routine';
     $('task-tracking').value = task ? task.tracking : kind === 'optional' ? 'timer' : 'check';
     var schedule = task ? task.schedule : {};
@@ -402,6 +441,7 @@
     $('record-end-date').value = entry && entry.endAt ? entry.endDate : date;
     $('record-end').value = entry && entry.endAt ? recordedTime(entry.endAt, entry.endOffset) : $('record-start').value;
     $('record-note').value = entry && entry.note || '';
+    $('record-color').value = itemColor(entry);
     $('record-delete').hidden = !entry;
     $('record-save').textContent = entry ? 'Save changes' : 'Add moment';
     $('record-error').hidden = true;
@@ -431,13 +471,21 @@
   }
   function handleAction(button) {
     var action = button.dataset.action, id = button.dataset.id, result;
+    if (action === 'new-event') { eventEditor.open(null, button.dataset.date || selected); return; }
+    if (action === 'edit-event') { eventEditor.open(id, button.dataset.date || selected); return; }
+    if (action === 'calendar-month') {
+      calendarMonth = window.ProkopeCalendar.shiftMonth(calendarMonth, Number(button.dataset.delta));
+      selected = calendarMonth; calendarSelected = selected; render(); return;
+    }
+    if (action === 'calendar-today') { selected = today; calendarMonth = today.slice(0, 7) + '-01'; render(); return; }
+    if (action === 'calendar-day') { selected = button.dataset.date; render(); return; }
     if (action === 'edit-entry') { openRecord(id); return; }
     if (action === 'log-earlier') { openRecord(); return; }
     if (action === 'jump-section') { $(button.dataset.target).scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     if (action === 'jump-now') { scrollMap(button.dataset.map, T.minutesAt(new Date())); return; }
     if (action === 'jump-minute') { scrollMap(button.dataset.map, Number(button.dataset.minute)); return; }
     if (action === 'jump-first') {
-      var first = M.entriesForDate(state, selected).map(function (entry) { return T.segment(entry, selected); }).filter(Boolean).sort(function (a, b) { return a.startMinute - b.startMinute; })[0];
+      var first = dayItems(M.entriesForDate(state, selected), M.tasksForDate(state, selected)).sort(function (a, b) { return a.startMinute - b.startMinute; })[0];
       scrollMap(button.dataset.map, first ? first.startMinute : 0); return;
     }
     if (action === 'visit-entry') {
@@ -550,6 +598,7 @@
     else if (button.dataset.action) handleAction(button);
     else if (button.hasAttribute('data-close-dialog')) button.closest('dialog').close();
   });
+  $('add-event').addEventListener('click', function () { eventEditor.open(); });
   $('add-task').addEventListener('click', function () { openTask(); });
   $('task-kind').addEventListener('change', updateForm);
   $('task-repeat').addEventListener('change', updateForm);
@@ -557,7 +606,7 @@
     event.preventDefault();
     var id = $('task-id').value, kind = $('task-kind').value;
     var input = {
-      name: $('task-name').value, kind: kind, tracking: $('task-tracking').value,
+      name: $('task-name').value, color: $('task-color').value, kind: kind, tracking: $('task-tracking').value,
       schedule: { type: $('task-repeat').value, startDate: $('task-startdate').value, date: $('task-date').value, time: kind === 'optional' ? '' : $('task-time').value,
         weekdays: Array.from(document.querySelectorAll('[name="weekday"]:checked'), function (el) { return Number(el.value); }), interval: Number($('task-interval').value), monthDay: Number($('task-monthday').value) }
     };
@@ -586,7 +635,7 @@
       var start = inputInstant($('record-date').value, $('record-start').value, original ? original.startOffset : undefined, original && original.startAt, original && original.date);
       var tracking = original ? original.tracking : $('record-tracking').value;
       var end = tracking === 'check' ? start : original && original.endAt === null ? null : inputInstant($('record-end-date').value, $('record-end').value, original ? original.endOffset : undefined, original && original.endAt, original && original.endDate);
-      var input = { title: $('record-title').value, tracking: tracking, startAt: start.stamp, startOffset: start.offset, endAt: end ? end.stamp : null, endOffset: end ? end.offset : null, note: $('record-note').value };
+      var input = { title: $('record-title').value, tracking: tracking, startAt: start.stamp, startOffset: start.offset, endAt: end ? end.stamp : null, endOffset: end ? end.offset : null, note: $('record-note').value, color: $('record-color').value };
       var preview = clone(state);
       if (original) M.updateEntry(preview, original.id, input); else M.createManualEntry(preview, input);
       var saveMessage = '';
@@ -645,7 +694,7 @@
   $('toast-close').addEventListener('click', function () { $('toast').hidden = true; undoAction = null; });
   $('apply-update').addEventListener('click', function () {
     if (!waitingWorker) return;
-    if ($('task-dialog').open || $('record-dialog').open) { toast('Save or close your changes before updating.'); return; }
+    if ($('task-dialog').open || $('record-dialog').open || $('event-dialog').open) { toast('Save or close your changes before updating.'); return; }
     if ($('quick-log-name').value.trim()) { toast('Log your current note or clear it before updating.'); return; }
     updateRequested = true; waitingWorker.postMessage({ type: 'SKIP_WAITING' });
   });
@@ -678,6 +727,9 @@
         var entries = M.entriesForDate(state, selected), due = dailyTasks(selected);
         $('day-summary').innerHTML = summary(entries, due);
         $('history-summary').innerHTML = summary(entries, due);
+        if (view === 'history' && !$('calendar-panel').contains(document.activeElement)) {
+          window.ProkopeCalendar.render($('calendar-panel'), { state: state, selected: selected, today: today, month: calendarMonth });
+        }
       }
     }
     document.querySelectorAll('[data-elapsed]').forEach(function (el) { var entry = state.entries.find(function (item) { return item.id === el.dataset.elapsed; }); if (entry) el.textContent = elapsed(entry); });

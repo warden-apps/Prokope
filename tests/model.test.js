@@ -15,6 +15,12 @@ function routine(state, overrides = {}) {
   }, start);
 }
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
+function event(state, overrides = {}) {
+  return M.createTask(state, {
+    name: 'Work', kind: 'event', tracking: 'none', color: '#55786a',
+    schedule: { type: 'daily', startDate: '2026-01-01', time: '09:00', endTime: '17:00' }, ...overrides
+  }, start);
+}
 
 test('calendar arithmetic handles year boundaries and leap days', () => {
   assert.equal(M.localDate(at('2026-01-01T00:00:00Z')), '2026-01-01');
@@ -22,6 +28,189 @@ test('calendar arithmetic handles year boundaries and leap days', () => {
   assert.equal(M.addDays('2024-02-28', 1), '2024-02-29');
   assert.equal(M.addDays('2024-03-01', -1), '2024-02-29');
   assert.equal(M.addDays('2025-02-28', 1), '2025-03-01');
+});
+
+test('calendar events need no completion and never create recorded activity entries', () => {
+  const state = M.newState();
+  const task = event(state);
+  assert.equal(task.tracking, 'none');
+  assert.equal(task.note, '');
+  assert.equal(task.location, '');
+  assert.equal(M.tasksForDate(state, '2026-01-01')[0].id, task.id);
+  assert.throws(() => M.completeTask(state, task.id, start), /without completion/);
+  assert.throws(() => M.startTask(state, task.id, start), /without completion/);
+  assert.equal(state.entries.length, 0);
+  assert.equal(M.isCompleted(state, task.id, '2026-01-01'), false);
+  assert.equal(M.validateState(clone(state)), true);
+});
+
+test('an appointment has a date, details, color and exact timed span', () => {
+  const state = M.newState();
+  const task = event(state, {
+    name: 'Doctor', color: '#8844aa', note: ' Bring test results. ', location: ' Clinic 2 ',
+    schedule: { type: 'once', date: '2026-02-12', time: '14:30', endTime: '15:15' }
+  });
+  assert.equal(task.note, 'Bring test results.');
+  assert.equal(task.location, 'Clinic 2');
+  const [occurrence] = M.eventOccurrencesForDate(state, '2026-02-12');
+  assert.equal(occurrence.task.id, task.id);
+  assert.equal(occurrence.startMinute, 870);
+  assert.equal(occurrence.endMinute, 915);
+  assert.equal(occurrence.point, false);
+  assert.equal(occurrence.allDay, false);
+  assert.equal(M.eventOccurrencesForDate(state, '2026-02-13').length, 0);
+});
+
+test('all-day events and point markers remain distinct', () => {
+  const state = M.newState();
+  event(state, { name: 'Holiday', schedule: { type: 'once', date: '2026-01-01' } });
+  event(state, { name: 'Wake up', schedule: { type: 'daily', startDate: '2026-01-01', time: '07:00' } });
+  const [allDay, point] = M.eventOccurrencesForDate(state, '2026-01-01');
+  assert.equal(allDay.allDay, true);
+  assert.equal(allDay.point, false);
+  assert.equal(allDay.startMinute, 0);
+  assert.equal(allDay.endMinute, 1440);
+  assert.equal(point.allDay, false);
+  assert.equal(point.point, true);
+  assert.equal(point.startMinute, 420);
+  assert.equal(point.endMinute, 420);
+});
+
+test('event repeats honor weekdays, intervals, month dates and inclusive end dates', () => {
+  const state = M.newState();
+  const weekly = event(state, { schedule: { type: 'weekdays', startDate: '2026-01-05', weekdays: [1, 3, 5], untilDate: '2026-01-09' } });
+  assert.equal(M.isDue(weekly, '2026-01-05'), true);
+  assert.equal(M.isDue(weekly, '2026-01-06'), false);
+  assert.equal(M.isDue(weekly, '2026-01-09'), true);
+  assert.equal(M.isDue(weekly, '2026-01-12'), false);
+  const interval = event(state, { schedule: { type: 'interval', startDate: '2026-01-01', interval: 2 } });
+  assert.equal(M.isDue(interval, '2026-01-03'), true);
+  assert.equal(M.isDue(interval, '2026-01-04'), false);
+  const monthly = event(state, { schedule: { type: 'monthly', startDate: '2026-01-01', monthDay: 31 } });
+  assert.equal(M.isDue(monthly, '2026-02-28'), false);
+  assert.equal(M.isDue(monthly, '2026-03-31'), true);
+});
+
+test('skipping and restoring one event occurrence preserves its repeating series', () => {
+  const state = M.newState();
+  const task = event(state);
+  M.skipEvent(state, task.id, '2026-01-02');
+  assert.equal(M.isDue(task, '2026-01-02'), false);
+  assert.equal(M.tasksForDate(state, '2026-01-02').length, 0);
+  assert.equal(M.eventOccurrencesForDate(state, '2026-01-02').length, 0);
+  assert.equal(M.isDue(task, '2026-01-03'), true);
+  M.skipEvent(state, task.id, '2026-01-02');
+  assert.deepEqual(task.excludedDates, ['2026-01-02']);
+  assert.equal(M.validateState(clone(state)), true);
+  M.restoreEventOccurrence(state, task.id, '2026-01-02');
+  assert.equal(M.isDue(task, '2026-01-02'), true);
+  assert.throws(() => M.skipEvent(state, task.id, '2025-12-31'));
+  const ordinary = routine(state);
+  assert.throws(() => M.skipEvent(state, ordinary.id, '2026-01-02'));
+});
+
+test('overnight events split across months and keep the origin date for exclusions and end dates', () => {
+  const state = M.newState();
+  const task = event(state, { schedule: { type: 'daily', startDate: '2026-01-31', time: '22:30', endTime: '06:45', endNextDay: true, untilDate: '2026-01-31' } });
+  const [first] = M.eventOccurrencesForDate(state, '2026-01-31');
+  const [tail] = M.eventOccurrencesForDate(state, '2026-02-01');
+  assert.equal(first.startMinute, 1350);
+  assert.equal(first.endMinute, 1440);
+  assert.equal(first.continuesAfter, true);
+  assert.equal(tail.startMinute, 0);
+  assert.equal(tail.endMinute, 405);
+  assert.equal(tail.occurrenceDate, '2026-01-31');
+  assert.equal(tail.continuesBefore, true);
+  assert.equal(M.eventOccurrencesForDate(state, '2026-02-02').length, 0);
+  M.skipEvent(state, task.id, '2026-01-31');
+  assert.equal(M.eventOccurrencesForDate(state, '2026-01-31').length, 0);
+  assert.equal(M.eventOccurrencesForDate(state, '2026-02-01').length, 0);
+});
+
+test('midnight endings have no phantom next-day event and daily nights retain separate occurrences', () => {
+  const state = M.newState();
+  event(state, { schedule: { type: 'once', date: '2026-01-01', time: '20:00', endTime: '00:00', endNextDay: true } });
+  assert.equal(M.eventOccurrencesForDate(state, '2026-01-01')[0].endMinute, 1440);
+  assert.equal(M.eventOccurrencesForDate(state, '2026-01-02').length, 0);
+  const sleep = event(state, { schedule: { type: 'daily', startDate: '2026-01-01', time: '23:00', endTime: '07:00', endNextDay: true } });
+  const pieces = M.eventOccurrencesForDate(state, '2026-01-02').filter(o => o.task.id === sleep.id);
+  assert.deepEqual(pieces.map(o => o.occurrenceDate), ['2026-01-01', '2026-01-02']);
+  assert.deepEqual(pieces.map(o => [o.startMinute, o.endMinute]), [[0, 420], [1380, 1440]]);
+});
+
+test('event occurrences handle the first valid date without underflow and 24-hour durations', () => {
+  const state = M.newState();
+  event(state, { schedule: { type: 'once', date: '0001-01-01', time: '12:00', endTime: '12:00', endNextDay: true } });
+  assert.equal(M.eventOccurrencesForDate(state, '0001-01-01').length, 1);
+  assert.equal(M.eventOccurrencesForDate(state, '0001-01-02')[0].endMinute, 720);
+});
+
+test('archiving an event retains past occurrences and the tail of the previous night', () => {
+  const state = M.newState();
+  const task = event(state, { schedule: { type: 'daily', startDate: '2026-01-01', time: '22:00', endTime: '06:00', endNextDay: true } });
+  M.archiveTask(state, task.id, at('2026-01-03T12:00:00Z'));
+  assert.equal(M.isDue(task, '2026-01-02'), true);
+  assert.equal(M.isDue(task, '2026-01-03'), false);
+  assert.equal(M.eventOccurrencesForDate(state, '2026-01-03').length, 1);
+  assert.equal(M.eventOccurrencesForDate(state, '2026-01-03')[0].occurrenceDate, '2026-01-02');
+  assert.equal(M.eventOccurrencesForDate(state, '2026-01-04').length, 0);
+});
+
+test('invalid event schedules and metadata never partially change saved state', () => {
+  const state = M.newState();
+  const good = event(state);
+  const before = clone(state);
+  for (const input of [
+    { tracking: 'check' }, { tracking: 'timer' }, { color: 'red' }, { color: '#abc' },
+    { note: 'x'.repeat(1001) }, { location: 'x'.repeat(161) }, { excludedDates: ['2026-02-30'] },
+    { schedule: { type: 'optional' } }, { schedule: { untilDate: '2025-12-31' } },
+    { schedule: { type: 'once', date: '2026-01-01', untilDate: '2026-01-03' } },
+    { schedule: { time: '', endTime: '12:00' } }, { schedule: { endTime: '', endNextDay: true } },
+    { schedule: { endNextDay: 'yes' } }, { schedule: { time: '09:00', endTime: '09:00' } },
+    { schedule: { time: '18:00', endTime: '08:00' } },
+    { schedule: { time: '09:00', endTime: '17:00', endNextDay: true } }
+  ]) {
+    assert.throws(() => M.updateTask(state, good.id, input, start), JSON.stringify(input));
+    assert.deepEqual(state, before);
+  }
+});
+
+test('event backup validation rejects malformed fields while old activity backups stay valid', () => {
+  const state = M.newState();
+  const old = routine(state);
+  M.completeTask(state, old.id, start);
+  assert.equal('color' in old, false);
+  assert.equal('color' in state.entries[0], false);
+  assert.equal(M.validateState(clone(state)), true);
+  event(state);
+  assert.equal(M.validateState(clone(state)), true);
+  for (const mutate of [
+    t => { t.color = 'url(javascript:bad)'; }, t => { t.excludedDates = ['bad']; },
+    t => { t.tracking = 'check'; }, t => { t.schedule.endNextDay = true; },
+    t => { t.location = 'x'.repeat(161); }, t => { t.schedule.untilDate = '2025-12-31'; }
+  ]) {
+    const bad = clone(state);
+    mutate(bad.tasks[1]);
+    assert.equal(M.validateState(bad), false);
+  }
+});
+
+test('record colors are snapshots independent of later task edits and can be corrected', () => {
+  const state = M.newState();
+  const task = routine(state, { color: '#4455aa' });
+  const entry = M.completeTask(state, task.id, start);
+  M.updateTask(state, task.id, { color: '#aa5544' }, start);
+  assert.equal(entry.color, '#4455aa');
+  M.updateEntry(state, entry.id, { note: 'Keep the original color' }, start);
+  assert.equal(entry.color, '#4455aa');
+  M.updateEntry(state, entry.id, { color: '#99aa55' }, start);
+  assert.equal(entry.color, '#99aa55');
+  assert.equal(task.color, '#aa5544');
+  assert.throws(() => M.updateEntry(state, entry.id, { color: 'bad' }, start));
+  const bad = clone(state);
+  bad.entries[0].color = 'bad';
+  assert.equal(M.validateState(bad), false);
+  assert.equal(M.validateState(clone(state)), true);
 });
 
 test('daily schedules begin on the selected start day', () => {

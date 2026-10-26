@@ -622,3 +622,42 @@ h1 { font-family: var(--serif); font-size: clamp(36px, 3.7vw, 53px); letter-spac
   .day-map-tools .map-jump { min-height:30px; }
   .day-map-heading h2 { font-size:25px; }
 }
+
+/* Events share a color across the calendar and the measured day. */
+.create-actions { display:flex; gap:8px; align-items:center; }
+.create-actions .button { gap:6px; }
+.create-actions .icon { width:16px; height:16px; }
+.event-color-dot { display:block; width:12px; height:12px; border-radius:4px; background:var(--item-color); flex:0 0 12px; margin:0 8px; }
+.map-event { border-left-color:var(--item-color,#55786a); }
+.map-event.is-event { background:#edf2ed; background:color-mix(in srgb,var(--item-color) 13%,#fffefa); border:1px solid var(--item-color); border-left-width:3px; color:var(--ink); }
+.map-event.is-event:hover { background:color-mix(in srgb,var(--item-color) 22%,#fffefa); }
+.map-event.is-planned { border-color:var(--item-color,#55786a); }
+.map-event.is-point,.map-event.is-timer { background:color-mix(in srgb,var(--item-color) 10%,#fffefa); color:var(--ink); }
+.map-event.is-running { background:#fbebdc; color:#945631; }
+.event-duration-bar { background:var(--item-color,#55786a); }
+.overview-mark { background:var(--item-color,#55786a); }
+.overview-mark.is-planned { background:var(--item-color,#55786a); opacity:.45; }
+.overview-mark.is-running { background:var(--accent); }
+.map-legend .legend-event::before { background:#fffefa; border:1px solid #55786a; border-left-width:3px; }
+.map-all-day { display:flex; align-items:flex-start; gap:12px; padding:4px 16px 12px; }
+.map-all-day > span { flex:0 0 42px; font-size:10px; color:var(--muted); padding-top:13px; }
+.map-all-day > div { display:flex; flex-wrap:wrap; gap:6px; min-width:0; }
+.all-day-event { border-radius:5px; min-height:44px; padding:9px 12px; border:1px solid var(--line); border-left:3px solid var(--item-color); background:#f0f3e9; background:color-mix(in srgb,var(--item-color) 12%,#fffefa); color:var(--ink); font-size:12px; text-align:left; overflow-wrap:anywhere; max-width:100%; }
+.calendar-day-heading { display:flex; gap:12px; justify-content:space-between; align-items:center; margin:30px 0 16px; }
+.calendar-day-heading h2 { font-family:var(--serif); font-size:25px; letter-spacing:-.5px; }
+.color-field { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.color-field input[type="color"] { width:64px; min-width:64px; height:44px; padding:5px; cursor:pointer; }
+.map-empty-hint { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+@media (max-width:760px) {
+  .header-actions { gap:10px; }
+  .live-clock-caption { display:none; }
+  .live-clock-value { font-size:23px; }
+  .create-actions .button,#add-task { min-height:44px; padding:9px 10px; font-size:12px; }
+  .create-actions { gap:6px; }
+  .map-all-day { padding-left:12px; padding-right:12px; gap:8px; }
+  .calendar-day-heading h2 { font-size:23px; }
+}
+@media (max-width:360px) {
+  .header-actions { flex-wrap:wrap; }
+  .create-actions { margin-left:auto; }
+}
