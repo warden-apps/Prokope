@@ -219,6 +219,76 @@
     return entry;
   }
   function logEntry(state, name, now) { return makeEntry(state, null, title(name), dateValue(now), null, false); }
+  function note(value) {
+    if (value === undefined) return '';
+    if (typeof value !== 'string' || value.length > 1000) fail('Keep notes to 1000 characters or fewer.');
+    return value.trim();
+  }
+  function correctedRecord(entry, input, now) {
+    if (!plain(input) || !safeTree(input, 0)) fail('Invalid activity record.');
+    var next = Object.assign({}, entry), date = dateValue(now);
+    if (input.tracking !== undefined && input.tracking !== entry.tracking) fail('The recording type cannot be changed.');
+    next.title = title(input.title === undefined ? entry.title : input.title);
+    next.note = note(input.note === undefined ? entry.note : input.note);
+    next.startAt = input.startAt === undefined ? entry.startAt : input.startAt;
+    next.startOffset = input.startOffset === undefined ? entry.startOffset : input.startOffset;
+    if (!validISO(next.startAt) || !validOffset(next.startOffset)) fail('Choose a valid start time and timezone.');
+    if (Date.parse(next.startAt) > date.getTime()) fail('A recorded activity cannot start in the future.');
+    next.date = requireDate(localDateAtOffset(next.startAt, next.startOffset));
+    if (entry.tracking === 'check') {
+      if (input.endAt !== undefined && input.endAt !== next.startAt) fail('A completed action has one recorded time.');
+      if (input.endOffset !== undefined && input.endOffset !== next.startOffset) fail('A completed action has one recorded timezone.');
+      next.endAt = next.startAt;
+      next.endOffset = next.startOffset;
+      next.endDate = next.date;
+    } else {
+      next.endAt = input.endAt === undefined ? entry.endAt : input.endAt;
+      next.endOffset = input.endOffset === undefined ? entry.endOffset : input.endOffset;
+      if (next.endAt === null) {
+        if (entry.taskId === null) fail('A manually added timed activity needs a finish time.');
+        if (input.endOffset !== undefined && input.endOffset !== null) fail('An unfinished activity has no finish timezone.');
+        next.endOffset = null;
+        next.endDate = null;
+      } else {
+        if (!validISO(next.endAt) || !validOffset(next.endOffset)) fail('Choose a valid finish time and timezone.');
+        if (Date.parse(next.endAt) < Date.parse(next.startAt)) fail('The finish time cannot be earlier than the start time.');
+        if (Date.parse(next.endAt) > date.getTime()) fail('A recorded activity cannot finish in the future.');
+        next.endDate = requireDate(localDateAtOffset(next.endAt, next.endOffset));
+      }
+    }
+    next.updatedAt = date.toISOString();
+    return next;
+  }
+  function updateEntry(state, entryId, input, now) {
+    var entry = getEntry(state, entryId);
+    var next = correctedRecord(entry, input, now);
+    // A linked record keeps the occurrence it fulfilled even when its actual
+    // time is corrected. A free-form record follows its corrected calendar day.
+    if (entry.taskId === null) next.occurrenceDate = next.date;
+    var candidate = Object.assign({}, state, {
+      entries: state.entries.map(function (item) { return item.id === entryId ? next : item; })
+    });
+    if (!validateState(candidate)) fail('This change conflicts with another saved activity record.');
+    Object.assign(entry, next);
+    return entry;
+  }
+  function createManualEntry(state, input, now) {
+    if (!plain(input) || !safeTree(input, 0)) fail('Invalid activity record.');
+    var tracking = input.tracking || 'check';
+    if (['check', 'timer'].indexOf(tracking) < 0) fail('Choose completion or timer tracking.');
+    var source = {
+      id: id('entry'), taskId: null, kind: 'quick', tracking: tracking,
+      title: input.title, startAt: input.startAt, startOffset: input.startOffset,
+      endAt: input.endAt, endOffset: input.endOffset, note: '', manual: true
+    };
+    if (tracking === 'timer' && !input.endAt) fail('A manually added timed activity needs a finish time.');
+    var entry = correctedRecord(source, input, now);
+    entry.occurrenceDate = entry.date;
+    var candidate = Object.assign({}, state, { entries: state.entries.concat([entry]) });
+    if (!validateState(candidate)) fail('This activity record could not be added.');
+    state.entries.push(entry);
+    return entry;
+  }
   function deleteEntry(state, entryId) {
     var index = state.entries.findIndex(function (entry) { return entry.id === entryId; });
     if (index < 0) fail('This activity record is no longer available.');
@@ -267,7 +337,10 @@
       if (!validTasks) return false;
       return value.entries.every(function (entry) {
         if (!plain(entry) || !validId(entry.id) || entryIds.has(entry.id)) return false;
-        if (entry.title !== title(entry.title) || !validISO(entry.startAt) || !validDate(entry.date) || !validDate(entry.occurrenceDate) || entry.occurrenceDate > entry.date) return false;
+        if (entry.title !== title(entry.title) || !validISO(entry.startAt) || !validDate(entry.date) || !validDate(entry.occurrenceDate)) return false;
+        if (entry.note !== undefined && (typeof entry.note !== 'string' || entry.note.length > 1000)) return false;
+        if (entry.manual !== undefined && typeof entry.manual !== 'boolean') return false;
+        if (entry.updatedAt !== undefined && !validISO(entry.updatedAt)) return false;
         if (!validOffset(entry.startOffset) || localDateAtOffset(entry.startAt, entry.startOffset) !== entry.date) return false;
         if (['check', 'timer'].indexOf(entry.tracking) < 0 || ['routine', 'optional', 'planned', 'quick'].indexOf(entry.kind) < 0) return false;
         if (entry.taskId !== null && !taskIds.has(entry.taskId)) return false;
@@ -278,7 +351,7 @@
         } else {
           if (!validISO(entry.endAt) || entry.endAt < entry.startAt || !validDate(entry.endDate) || !validOffset(entry.endOffset)) return false;
           if (localDateAtOffset(entry.endAt, entry.endOffset) !== entry.endDate) return false;
-          if (entry.tracking === 'check' && entry.startAt !== entry.endAt) return false;
+          if (entry.tracking === 'check' && (entry.startAt !== entry.endAt || entry.startOffset !== entry.endOffset)) return false;
         }
         if (entry.kind === 'routine' || entry.kind === 'planned') {
           var key = entry.taskId + ':' + entry.occurrenceDate;
@@ -303,6 +376,7 @@
     createTask: createTask, updateTask: updateTask, archiveTask: archiveTask, restoreTask: restoreTask,
     isDue: isDue, tasksForDate: tasksForDate, scheduleLabel: scheduleLabel,
     completeTask: completeTask, startTask: startTask, finishEntry: finishEntry, logEntry: logEntry,
+    createManualEntry: createManualEntry, updateEntry: updateEntry,
     deleteEntry: deleteEntry, entriesForDate: entriesForDate, activeEntries: activeEntries,
     isCompleted: isCompleted, validateState: validateState
   };

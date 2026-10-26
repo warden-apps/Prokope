@@ -15,6 +15,7 @@
   <link rel="icon" type="image/png" href="apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
   <script src="model.js" defer></script>
+  <script src="timeline.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -57,7 +58,7 @@
     <main id="main" class="main" tabindex="-1">
       <header class="page-header">
         <div class="header-copy"><p class="eyebrow">A LITTLE, EVERY DAY</p><h1 id="view-title">A day, well spent.</h1><p id="view-subtitle" class="page-subtitle">The things you intend. The things you do.</p></div>
-        <button type="button" class="button primary-button" id="add-task"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>New activity</span></button>
+        <div class="header-actions"><div class="live-clock" aria-label="Current local time"><time id="live-clock-value" class="live-clock-value">00:00:00</time><span class="live-clock-caption">YOUR LOCAL TIME</span></div><button type="button" class="button primary-button" id="add-task"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>New activity</span></button></div>
       </header>
       <div id="storage-warning" class="notice notice-warning" role="alert" hidden></div>
       <div id="update-banner" class="notice notice-update" hidden><span>A fresh version is ready when you are.</span><button type="button" class="text-button" id="apply-update">Update app <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></div>
@@ -72,8 +73,9 @@
       </section>
 
       <section id="today-view" aria-label="Your day">
+        <div class="day-view-switch" aria-label="Jump to a section"><button class="text-button" data-action="jump-section" data-target="today-map-panel">Your 24 hours <span aria-hidden="true">↓</span></button><button class="text-button" data-action="jump-section" data-target="daily-activities">Activities <span aria-hidden="true">↓</span></button><button class="text-button" data-action="log-earlier">+ Log earlier</button></div>
         <div class="dashboard-grid">
-          <div class="day-main">
+          <div class="day-main" id="daily-activities">
             <div id="day-summary" class="day-summary"></div>
             <form id="quick-log-form" class="quick-log-form">
               <label for="quick-log-name"><span class="quick-log-star" aria-hidden="true">✳</span> Just did something?</label>
@@ -93,10 +95,11 @@
               <div id="optional-list" class="task-list"></div>
             </section>
           </div>
-          <aside class="timeline-panel" aria-labelledby="timeline-heading">
-            <div class="timeline-header"><div class="timeline-eyebrow"><span class="live-dot" aria-hidden="true"></span> YOUR DAILY RECORD</div><h2 id="timeline-heading">The day, as<br>it happened.</h2><p id="timeline-date"></p></div>
-            <div id="timeline-list" class="timeline-list"></div>
-            <div class="timeline-footer"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><span>Real moments. Remembered for you.</span></div>
+          <aside class="timeline-panel day-map-card" id="today-map-panel" aria-labelledby="timeline-heading">
+            <div class="day-map-heading"><div><p class="section-kicker" id="timeline-date">TODAY, HOUR BY HOUR</p><h2 id="timeline-heading">Your 24 hours.</h2></div><div class="day-map-tools"><button class="map-jump text-button" data-action="jump-now" data-map="today">Now</button><button class="map-jump text-button" data-action="jump-first" data-map="today">First entry</button></div></div>
+            <div class="map-legend"><span class="legend-recorded">Recorded</span><span class="legend-planned">Planned</span><span class="legend-running">In progress</span></div>
+            <div id="timeline-list" class="day-map-body"></div>
+            <p class="day-map-footer">00:00 → 24:00 · Tap a moment for details. Scroll to explore.</p>
           </aside>
         </div>
       </section>
@@ -107,7 +110,12 @@
       </section>
 
       <section id="history-view" aria-labelledby="history-heading" hidden>
-        <div class="history-layout"><div><p class="section-kicker">THE SMALL THINGS ADD UP</p><h2 id="history-heading" class="history-heading">A record of showing up.</h2><p class="history-intro">Choose a day above to revisit what you did and when you did it.</p><div id="history-summary" class="day-summary"></div></div><div id="history-timeline" class="history-timeline"></div></div>
+        <div class="history-intro-row"><div><p class="section-kicker">EVERY HOUR HAS A STORY</p><h2 id="history-heading" class="history-heading">A day in full.</h2><p class="history-intro">Your actual times, from midnight to midnight. Choose a date above to look back.</p></div><button class="secondary-button button" data-action="log-earlier">+ Add a missed moment</button></div>
+        <div id="history-summary" class="day-summary"></div>
+        <div class="history-layout">
+          <section class="day-map-card" aria-label="24-hour history"><div class="day-map-heading"><div><p class="section-kicker">THE WHOLE DAY</p><h2 id="history-map-date">Your 24 hours</h2></div><div class="day-map-tools"><button class="map-jump text-button" data-action="jump-now" data-map="history">Now</button><button class="map-jump text-button" data-action="jump-first" data-map="history">First entry</button></div></div><div class="map-legend"><span class="legend-recorded">Recorded</span><span class="legend-planned">Planned</span><span class="legend-running">In progress</span></div><div id="history-timeline" class="day-map-body"></div><p class="day-map-footer">Times stay as recorded, even when you travel.</p></section>
+          <section class="history-records-panel"><div class="section-heading"><h2>The details</h2></div><label class="history-search-label" for="history-search">Find a moment across your days</label><input type="search" id="history-search" placeholder="Search activities or notes…" maxlength="160"><p id="history-results-count" class="field-hint" role="status"></p><div id="history-records" class="record-results"></div></section>
+        </div>
       </section>
       <footer class="main-footer"><span>Prokopē · progress, one day at a time</span><span>Made for the life you actually live.</span></footer>
     </main>
@@ -144,6 +152,21 @@
     <section class="settings-section"><div class="settings-section-heading"><span class="settings-number">02</span><h3>A home on your iPhone</h3></div><p>Open this site in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. Open it once while online. After that, your day is available offline.</p><p class="field-hint">Already installed? Open Prokopē from your Home Screen for the full app experience.</p></section>
     <section class="settings-section"><div class="settings-section-heading"><span class="settings-number">03</span><h3>Time, without the effort</h3></div><p>Tap to save the time. Start and finish to keep both. Active timers survive closing the app; they use the times you recorded.</p><p class="field-hint">Planned times organize your list. They don’t send notifications. Times use your device’s local timezone.</p></section>
     <div class="settings-signoff"><svg class="icon" aria-hidden="true"><use href="#i-leaf"/></svg><span>A little more present. A little more intentional.</span></div>
+  </dialog>
+
+  <dialog id="record-dialog" class="modal record-modal" aria-labelledby="record-dialog-title">
+    <form id="record-form">
+      <div class="modal-header"><div><p class="eyebrow" id="record-eyebrow">A MOMENT IN YOUR DAY</p><h2 id="record-dialog-title">The details.</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="Close record"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+      <input type="hidden" id="record-id">
+      <p id="record-context" class="entry-detail-note"></p>
+      <div class="field"><label for="record-title">What did you do?</label><input id="record-title" type="text" maxlength="160" required autocomplete="off"></div>
+      <div class="field" id="record-tracking-field"><label for="record-tracking">Type of record</label><select id="record-tracking"><option value="check">A single moment</option><option value="timer">Time spent on something</option></select></div>
+      <div class="field-grid record-grid"><div class="field"><label for="record-date">Date</label><input type="date" id="record-date" required></div><div class="field"><label for="record-start" id="record-start-label">Time · 24-hour</label><input type="time" id="record-start" step="1" required></div></div>
+      <div class="field-grid record-grid" id="record-end-fields"><div class="field"><label for="record-end-date">Finish date</label><input type="date" id="record-end-date"></div><div class="field"><label for="record-end">Finish time · 24-hour</label><input type="time" id="record-end" step="1"></div></div>
+      <div class="field"><label for="record-note">A note <span class="label-optional">optional</span></label><textarea id="record-note" rows="3" maxlength="1000" placeholder="Anything you’d like to remember."></textarea></div>
+      <p id="record-error" class="form-error" role="alert" hidden></p>
+      <div class="modal-footer"><button type="button" class="text-button danger-text" id="record-delete">Remove record</button><button type="submit" class="button primary-button" id="record-save">Save changes</button></div>
+    </form>
   </dialog>
 
   <dialog id="confirm-dialog" class="modal confirm-modal" aria-labelledby="confirm-title" aria-describedby="confirm-message"><div class="modal-header"><h2 id="confirm-title">Are you sure?</h2></div><p id="confirm-message"></p><div class="confirm-actions"><button type="button" class="button secondary-button" id="confirm-cancel">Cancel</button><button type="button" class="button primary-button" id="confirm-accept">Continue</button></div></dialog>

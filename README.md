@@ -9,9 +9,13 @@ Your daily rhythm, remembered. A private tracker for routines, plans, and the th
 - **Optional activities:** keep reusable activities such as reading or going for a walk. They are available when you want them, without becoming daily obligations.
 - **Automatic times:** mark an activity done to record the actual time of the tap. Timed activities have Start and Finish actions, preserving both times and the elapsed duration.
 - **Quick logging:** type something you just did to add it directly to today's timeline with the current time.
-- **History:** choose today, yesterday, or another date to see what happened and when. Activity names are saved with each entry, so renaming or archiving an activity does not erase its past.
+- **Your 24 hours:** explore a full 00:00–24:00 day map. Actions sit at their recorded times, timed sessions span their duration, and planned times have a distinct dashed outline. Overlapping activities stay individually selectable. A live 24-hour clock and Now marker follow today; previous days remain fixed.
+- **History:** choose today, yesterday, or another date, or search across activity names and notes. Activity names are saved with each entry, so renaming or archiving an activity does not erase its past.
+- **Fill in the picture:** tap a recorded moment to add a note or correct its name/date/time. Use **Log earlier** to add a missed action or a finished timed activity. Corrections affect that record, not the reusable activity. Future records are rejected; use a plan for future intentions.
 
-A planned time is a label in your schedule, not a notification or alarm. Completion is recorded at the actual time you act. Times use your device's local timezone when an event is recorded. A timer keeps its starting timestamp across app closures; it does not need a background process to keep running. A session that crosses midnight appears on both relevant days.
+A planned time is a label in your schedule, not a notification or alarm. Completion is recorded at the actual time you act. Times use your device's local timezone when an event is recorded. A timer keeps its starting timestamp across app closures; it does not need a background process to keep running. A session that crosses midnight is split across the relevant day maps. The map uses recorded local clock times even after you travel; the elapsed duration uses actual timestamps. Clock changes are identified in event details. For very short activities, a thin duration bar marks the exact span while the label has a larger tap target.
+
+Use **Now**, **First entry**, or the whole-day overview to move around the map. Scroll the hour grid to see the rest of the day. The phone layout keeps the map visible and provides a quick jump to the activity list.
 
 ## Install on iPhone
 
@@ -46,7 +50,7 @@ Use the server from a local browser. Loopback HTTP is a secure context for servi
 The app uses plain JavaScript, CSS, and local PNG icons. No package installation or compilation is required. Development checks:
 
 ```sh
-node --test tests/model.test.js
+node --test tests/*.test.js
 python3 tests/browser_smoke.py
 ```
 
@@ -60,6 +64,7 @@ Commit the app files, then choose **Settings → Pages → Deploy from a branch 
 index.html              application shell
 styles.css              responsive layout
 model.js                scheduling and records
+timeline.js             24-hour geometry and recorded time handling
 app.js                  interactions and local storage
 manifest.json           installed-app metadata
 sw.js                   offline app shell and update lifecycle
