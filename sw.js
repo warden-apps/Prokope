@@ -1,6 +1,6 @@
 /* Bump this version whenever an app-shell asset changes. A complete shell is
    installed before activation, and core assets stay together until an update. */
-const CACHE_VERSION = 'prokope-daily-v2';
+const CACHE_VERSION = 'prokope-daily-v3';
 const SCOPE = new URL(self.registration.scope);
 const SCOPE_TAG = encodeURIComponent(SCOPE.pathname);
 const SHELL_CACHE = CACHE_VERSION + ':shell:' + SCOPE_TAG;

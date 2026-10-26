@@ -24,6 +24,8 @@ Use **Now**, **First entry**, or the whole-day overview to move around the map. 
 3. Open the installed app once while online so its files can be saved for offline use.
 4. Afterwards, reopen it from the Home Screen and use it without a connection. Routines, plans, timers, and your history work locally.
 
+If an installed Home Screen icon stays unchanged after an update, iOS may be holding the old artwork. Download a backup before removing or re-adding the installed app; restore it if the new installation uses separate storage.
+
 Safari may use separate storage for a browser tab and the installed app. Make a backup before changing how you open the app, and restore it in the destination if needed. Do not assume that installing or uninstalling an app transfers its data.
 
 Updates download in the background when online. Apply the available update in the app when convenient; the complete new app replaces the previous version together. Installing on a physical iPhone should still be checked before a release; Chromium tests do not establish every iOS behavior.
