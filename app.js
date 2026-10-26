@@ -9,7 +9,8 @@
   var selected = M.localDate(), today = selected, view = 'today';
   var undoAction = null, toastTimer, waitingWorker, updateRequested = false;
   var confirmResolve = null, restoreBusy = false;
-  var clockMinute = '', recordOriginal = null;
+  var clockMinute = '', recordOriginal = null, taskOriginal = null;
+  var calendarFilter = 'all';
   var mapDates = { today: '', history: '' };
   var calendarMonth = selected.slice(0, 7) + '-01', calendarSelected = selected;
   var eventEditor = window.ProkopeEvents.init({
@@ -18,15 +19,57 @@
     onCreated: function (task) {
       var date = task.schedule.date || (task.schedule.startDate > selected ? task.schedule.startDate : selected);
       // Open the next occurrence so a newly saved future event is easy to find.
-      for (var i = 0; task.schedule.type !== 'once' && !M.isDue(task, date) && i < 62; i++) {
+      for (var i = 0; task.schedule.type !== 'once' && !M.isDue(task, date) && i < 3650; i++) {
         if (task.schedule.untilDate && date >= task.schedule.untilDate) break;
         try { date = M.addDays(date, 1); } catch (_) { break; }
       }
+      if (!M.isDue(task, date)) date = task.schedule.date || task.schedule.startDate;
       if (date !== selected) { selected = date; view = 'history'; }
       render();
     }
   });
 
+  function restoreView() {
+    try {
+      var saved = JSON.parse(sessionStorage.getItem('prokope.view.v1') || 'null');
+      if (!saved || !['today', 'library', 'history'].includes(saved.view)) return;
+      M.addDays(saved.selected, 0);
+      view = saved.view;
+      selected = saved.view === 'today' && saved.selected === saved.today ? today : saved.selected;
+      calendarMonth = selected.slice(0, 7) + '-01'; calendarSelected = selected;
+      calendarFilter = ['all', 'events', 'records'].includes(saved.filter) ? saved.filter : 'all';
+      $('calendar-search').value = typeof saved.query === 'string' ? saved.query.slice(0, 160) : '';
+    } catch (_) { /* A private or expired session can always start at today. */ }
+  }
+  function rememberView() {
+    try { sessionStorage.setItem('prokope.view.v1', JSON.stringify({ view: view, selected: selected, today: today, filter: calendarFilter, query: $('calendar-search').value })); }
+    catch (_) { /* Navigation still works when session storage is unavailable. */ }
+  }
+  function renderCalendar() {
+    if (view !== 'history') return;
+    document.querySelectorAll('[data-calendar-filter]').forEach(function (button) { button.setAttribute('aria-pressed', String(button.dataset.calendarFilter === calendarFilter)); });
+    window.ProkopeCalendar.render($('calendar-panel'), { state: state, selected: selected, today: today, month: calendarMonth, filter: calendarFilter, query: $('calendar-search').value });
+  }
+  function renderGlance() {
+    var container = $('schedule-glance');
+    if (view !== 'today' || selected !== today) { container.hidden = true; return; }
+    var minute = T.minutesAt(new Date());
+    var events = M.eventOccurrencesForDate(state, today).filter(function (item) { return !item.allDay; });
+    var current = events.filter(function (item) { return !item.point && item.startMinute <= minute && item.endMinute > minute; }).sort(function (a, b) { return a.endMinute - b.endMinute; });
+    var next = events.find(function (item) { return item.startMinute > minute; });
+    var nextDay = false;
+    if (!next) {
+      next = M.eventOccurrencesForDate(state, M.addDays(today, 1)).find(function (item) { return !item.allDay && !item.continuesBefore; });
+      nextDay = !!next;
+    }
+    function card(item, heading, detail) {
+      return '<button class="schedule-glance-item" style="--item-color:' + itemColor(item.task) + '" data-action="edit-event" data-id="' + escape(item.task.id) + '" data-date="' + item.occurrenceDate + '"><span class="glance-label">' + heading + '</span><strong>' + escape(item.task.name) + '</strong><span class="glance-detail">' + escape(detail) + '</span></button>';
+    }
+    var html = current.length ? card(current[0], 'Scheduled now', 'Until ' + minuteLabel(current[0].endMinute) + (current.length > 1 ? ' · ' + (current.length - 1) + ' overlapping' : '')) : '';
+    if (next) html += card(next, 'Up next', (nextDay ? 'Tomorrow · ' : '') + minuteLabel(next.startMinute));
+    container.hidden = !html;
+    if (container.innerHTML !== html) container.innerHTML = html;
+  }
   function escape(value) {
     return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -236,10 +279,12 @@
     var scrollTop = previous && mapDates[name] === selected ? previous.scrollTop : null;
     var focused = container.contains(document.activeElement) ? document.activeElement : null;
     var focus = focused && (focused.dataset.entryId || focused.dataset.taskId || '');
-    var focusDate = focused && focused.dataset.date;
+    var focusDate = focused && focused.dataset.date, focusTime = focused && focused.dataset.time;
     var items = dayItems(entries, due), positioned = T.layout(items, 46);
     var hours = Array.from({ length: 25 }, function (_, hour) {
-      return '<div class="hour-row" style="top:calc(24px + var(--day-height) * ' + hour / 24 + ')"><span class="hour-label">' + String(hour).padStart(2, '0') + ':00</span><span class="hour-rule"></span></div>';
+      var time = String(hour).padStart(2, '0') + ':00';
+      var label = hour === 24 ? '<span class="hour-label">24:00</span>' : '<button type="button" class="hour-label hour-add" data-action="new-event-time" data-time="' + time + '" aria-label="Add event at ' + time + '">' + time + '</button>';
+      return '<div class="hour-row" style="top:calc(24px + var(--day-height) * ' + hour / 24 + ')">' + label + '<span class="hour-rule"></span></div>';
     }).join('');
     var marks = positioned.map(function (item) {
       var entry = item.entry, planned = !!item.task, event = !!item.event;
@@ -257,7 +302,7 @@
       if (shortTimer) { classes += ' is-short'; times += ' · ' + elapsed(entry); }
       var durationBar = shortTimer ? '<span class="event-duration-bar" style="top:' + (item.startMinute - item.displayStart) / span * 100 + '%;height:' + Math.max(1, (item.endMinute - item.startMinute) / span * 100) + '%"></span>' : '';
       var attrs = planned ? ' data-action="' + (event ? 'edit-event' : 'edit') + '" data-id="' + escape(item.task.id) + '" data-task-id="' + escape(item.task.id) + '"' + (event ? ' data-date="' + item.occurrenceDate + '"' : '') : ' data-action="edit-entry" data-id="' + escape(entry.id) + '" data-entry-id="' + escape(entry.id) + '"';
-      return '<button type="button" class="map-event' + classes + '"' + attrs + ' data-start-minute="' + item.startMinute + '" data-end-minute="' + item.endMinute + '" style="--item-color:' + itemColor(item.task || entry) + ';top:' + item.displayStart / 1440 * 100 + '%;height:' + span / 1440 * 100 + '%;left:' + item.lane / item.lanes * 100 + '%;width:calc(' + 100 / item.lanes + '% - 5px)" aria-label="' + escape(title + ' · ' + times + ' · ' + detail) + '">' + durationBar + '<span class="event-anchor" style="top:' + Math.min(98, Math.max(0, (item.startMinute - item.displayStart) / span * 100)) + '%"></span><span class="event-clock">' + escape(times) + '</span><span class="event-title">' + escape(title) + '</span>' + (!item.point && span >= 76 ? '<span class="event-duration">' + escape(detail) + '</span>' : '') + '</button>';
+      return '<button type="button" class="map-event' + classes + '"' + attrs + ' data-start-minute="' + item.startMinute + '" data-end-minute="' + item.endMinute + '" style="--item-color:' + itemColor(item.task || entry) + ';top:' + item.displayStart / 1440 * 100 + '%;height:' + span / 1440 * 100 + '%;left:' + item.lane / item.lanes * 100 + '%;width:calc(' + 100 / item.lanes + '% - 5px)" aria-label="' + escape(title + ' · ' + times + ' · ' + detail) + '">' + durationBar + '<span class="event-anchor" style="top:' + Math.min(98, Math.max(0, (item.startMinute - item.displayStart) / span * 100)) + '%"></span><span class="event-label"><span class="event-clock">' + escape(times) + '</span><span class="event-title">' + escape(title) + '</span>' + (!item.point && span >= 76 ? '<span class="event-duration">' + escape(detail) + '</span>' : '') + '</span></button>';
     }).join('');
     var mini = positioned.map(function (item) {
       return '<button type="button" class="overview-mark' + (item.task && !item.event ? ' is-planned' : '') + (item.running ? ' is-running' : '') + '" style="--item-color:' + itemColor(item.task || item.entry) + ';left:' + item.startMinute / 1440 * 100 + '%;width:max(3px,' + Math.max(0, item.endMinute - item.startMinute) / 1440 * 100 + '%)" data-action="jump-minute" data-map="' + name + '" data-minute="' + item.startMinute + '" aria-label="Jump to ' + escape(minuteLabel(item.startMinute) + ': ' + (item.task ? item.task.name : item.entry.title)) + '"></button>';
@@ -272,6 +317,10 @@
     if (scrollTop !== null) scroller.scrollTop = scrollTop;
     else scroller.scrollTop = Math.max(0, (selected === today ? T.minutesAt(new Date()) - 120 : positioned.length ? positioned[0].startMinute - 60 : 0));
     mapDates[name] = selected;
+    if (focusTime) {
+      var hourButton = container.querySelector('[data-time="' + focusTime + '"]');
+      if (hourButton) hourButton.focus({ preventScroll: true });
+    }
     if (focus) {
       var target = Array.from(container.querySelectorAll('[data-entry-id], [data-task-id]')).find(function (button) { return (button.dataset.entryId === focus || button.dataset.taskId === focus) && button.dataset.date === focusDate; });
       if (target) target.focus({ preventScroll: true });
@@ -279,8 +328,8 @@
   }
   function renderMaps() {
     var entries = M.entriesForDate(state, selected), due = M.tasksForDate(state, selected);
-    dayMap('timeline-list', 'today', entries, due);
-    dayMap('history-timeline', 'history', entries, due);
+    if (view === 'today') dayMap('timeline-list', 'today', entries, due);
+    if (view === 'history') dayMap('history-timeline', 'history', entries, due);
     $('history-map-date').textContent = dateLabel(selected, { month: 'long', day: 'numeric' });
     document.querySelectorAll('[data-action="jump-now"]').forEach(function (button) { button.hidden = selected !== today; });
     document.querySelectorAll('[data-action="jump-first"]').forEach(function (button) { button.disabled = !dayItems(entries, due).length; });
@@ -304,10 +353,15 @@
   }
   function renderDays() {
     $('date-picker').value = selected;
+    $('previous-day').disabled = selected === '0001-01-01';
+    $('next-day').disabled = selected === '9999-12-31';
     var weekDay = dateObject(selected).getDay();
-    var monday = M.addDays(selected, -(weekDay + 6) % 7);
+    var monday;
+    try { monday = M.addDays(selected, -(weekDay + 6) % 7); } catch (_) { monday = '0001-01-01'; }
     $('week-strip').innerHTML = Array.from({ length: 7 }, function (_, i) {
-      var date = M.addDays(monday, i), hasEntries = M.entriesForDate(state, date).length > 0 || M.eventOccurrencesForDate(state, date).length > 0;
+      var date;
+      try { date = M.addDays(monday, i); } catch (_) { return '<span class="week-day" aria-hidden="true"></span>'; }
+      var hasEntries = M.entriesForDate(state, date).length > 0 || M.eventOccurrencesForDate(state, date).length > 0;
       return '<button class="week-day' + (date === selected ? ' is-selected' : '') + (date === today ? ' is-today' : '') + '" data-action="day" data-date="' + date + '" aria-label="' + escape(dateLabel(date)) + '" aria-pressed="' + (date === selected) + '"><span class="week-name">' + escape(dateLabel(date, { weekday: 'short' })) + '</span><span class="week-number">' + Number(date.slice(-2)) + '</span><span class="week-dot' + (hasEntries ? ' has-entries' : '') + '"></span></button>';
     }).join('');
   }
@@ -352,10 +406,12 @@
     $('quick-log-form').hidden = selected !== today;
     $('timeline-date').textContent = selected === today ? 'TODAY’S TIMELINE' : dateLabel(selected, { month: 'short', day: 'numeric' }).toUpperCase();
     renderMaps();
-    renderHistory();
+    if (view === 'history') renderHistory();
+    renderGlance();
     if (calendarSelected !== selected) { calendarMonth = selected.slice(0, 7) + '-01'; calendarSelected = selected; }
     $('week-strip').hidden = view === 'history';
-    window.ProkopeCalendar.render($('calendar-panel'), { state: state, selected: selected, today: today, month: calendarMonth });
+    renderCalendar();
+    rememberView();
     var libraryTasks = state.tasks.filter(function (task) { return $('show-archived').checked || !task.archivedAt; });
     var library = '';
     [['event', 'Events'], ['routine', 'Routines'], ['planned', 'Planned tasks'], ['optional', 'Optional activities']].forEach(function (group) {
@@ -390,6 +446,7 @@
   function openTask(taskId, kind) {
     var task = state.tasks.find(function (item) { return item.id === taskId; });
     if (kind === 'event' || task && task.kind === 'event') { eventEditor.open(taskId, selected); return; }
+    taskOriginal = task ? clone(task) : null;
     $('task-form').reset();
     $('task-id').value = task ? task.id : '';
     $('task-dialog-title').textContent = task ? 'A little adjustment.' : 'Make space for something.';
@@ -471,6 +528,7 @@
   }
   function handleAction(button) {
     var action = button.dataset.action, id = button.dataset.id, result;
+    if (action === 'new-event-time') { eventEditor.open(null, selected, button.dataset.time); return; }
     if (action === 'new-event') { eventEditor.open(null, button.dataset.date || selected); return; }
     if (action === 'edit-event') { eventEditor.open(id, button.dataset.date || selected); return; }
     if (action === 'calendar-month') {
@@ -615,9 +673,15 @@
       var preview = clone(state);
       if (id) M.updateTask(preview, id, input); else M.createTask(preview, input);
     } catch (error) { $('task-error').textContent = error.message; $('task-error').hidden = false; return; }
-    var result = transact(function (draft) { return id ? M.updateTask(draft, id, input) : M.createTask(draft, input); });
-    if (result) { $('task-dialog').close(); toast(id ? 'Activity updated. Past records keep their original name and times.' : 'A little intention, made concrete.'); }
-    else { $('task-error').textContent = 'The activity could not be saved. Check the storage message and try again.'; $('task-error').hidden = false; }
+    var saveMessage = '';
+    var result = transact(function (draft) {
+      if (id && JSON.stringify(draft.tasks.find(function (item) { return item.id === id; })) !== JSON.stringify(taskOriginal)) {
+        throw new Error('This activity changed in another window. Close and reopen it before editing.');
+      }
+      return id ? M.updateTask(draft, id, input) : M.createTask(draft, input);
+    }, { onError: function (error) { saveMessage = error.message; } });
+    if (result) { $('task-dialog').close(); toast(id ? 'Activity updated.' : 'Activity added.'); }
+    else { $('task-error').textContent = saveMessage || 'The activity could not be saved. Check the storage message and try again.'; $('task-error').hidden = false; }
   });
   $('task-archive').addEventListener('click', function () {
     var id = $('task-id').value;
@@ -665,6 +729,23 @@
     });
   });
   $('history-search').addEventListener('input', renderHistory);
+  $('calendar-search').addEventListener('input', function () { renderCalendar(); rememberView(); });
+  document.querySelectorAll('[data-calendar-filter]').forEach(function (button) {
+    button.addEventListener('click', function () { calendarFilter = button.dataset.calendarFilter; renderCalendar(); rememberView(); });
+  });
+  var mapPointer = null;
+  document.addEventListener('pointerdown', function (event) {
+    var canvas = event.target.closest('.day-canvas');
+    mapPointer = canvas ? { canvas: canvas, x: event.clientX, y: event.clientY, scrollTop: canvas.parentElement.scrollTop } : null;
+  }, { passive: true });
+  document.addEventListener('click', function (event) {
+    var canvas = event.target.closest('.day-canvas');
+    if (!canvas || event.target.closest('button') || !mapPointer || mapPointer.canvas !== canvas || Math.abs(event.clientY - mapPointer.y) > 8 || Math.abs(event.clientX - mapPointer.x) > 8 || Math.abs(canvas.parentElement.scrollTop - mapPointer.scrollTop) > 4) return;
+    var box = canvas.getBoundingClientRect();
+    var minute = Math.max(0, Math.min(1425, Math.round((event.clientY - box.top - 24) / 15) * 15));
+    mapPointer = null;
+    eventEditor.open(null, selected, minuteLabel(minute));
+  });
   $('quick-log-form').addEventListener('submit', function (event) {
     event.preventDefault();
     var result = transact(function (draft) { return M.logEntry(draft, $('quick-log-name').value); });
@@ -673,7 +754,7 @@
   $('previous-day').addEventListener('click', function () { selected = M.addDays(selected, -1); render(); });
   $('next-day').addEventListener('click', function () { selected = M.addDays(selected, 1); render(); });
   $('today-button').addEventListener('click', function () { selected = M.localDate(); render(); });
-  $('date-picker').addEventListener('change', function () { if (this.value && /^\d{4}-\d{2}-\d{2}$/.test(this.value)) { selected = this.value; render(); } });
+  $('date-picker').addEventListener('change', function () { try { M.addDays(this.value, 0); selected = this.value; render(); } catch (_) { this.value = selected; } });
   $('show-archived').addEventListener('change', render);
   $('open-settings').addEventListener('click', settings);
   $('export-data').addEventListener('click', exportData);
@@ -722,14 +803,13 @@
     document.querySelectorAll('.overview-now').forEach(function (line) { line.style.left = T.minutesAt(instant) / 1440 * 100 + '%'; });
     if (clockMinute !== minute) {
       clockMinute = minute;
+      renderGlance();
       if (M.activeEntries(state).length) {
         renderMaps();
         var entries = M.entriesForDate(state, selected), due = dailyTasks(selected);
         $('day-summary').innerHTML = summary(entries, due);
         $('history-summary').innerHTML = summary(entries, due);
-        if (view === 'history' && !$('calendar-panel').contains(document.activeElement)) {
-          window.ProkopeCalendar.render($('calendar-panel'), { state: state, selected: selected, today: today, month: calendarMonth });
-        }
+        renderCalendar();
       }
     }
     document.querySelectorAll('[data-elapsed]').forEach(function (el) { var entry = state.entries.find(function (item) { return item.id === el.dataset.elapsed; }); if (entry) el.textContent = elapsed(entry); });
@@ -737,6 +817,7 @@
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') refreshClock(); });
   setInterval(refreshClock, 1000);
   load();
+  restoreView();
   render();
   refreshClock();
   setupWorker();

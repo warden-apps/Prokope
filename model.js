@@ -377,6 +377,10 @@
     requireDate(key);
     return state.entries.filter(function (entry) {
       var last = entry.endDate || localDate();
+      // Midnight ends the preceding day's timer. Its captured finish offset
+      // decides that boundary, even if the viewer has since changed timezone.
+      if (entry.tracking === 'timer' && entry.endAt && entry.date < key && entry.endDate === key &&
+          (Date.parse(entry.endAt) - entry.endOffset * 60000) % DAY === 0) return false;
       return entry.date === key || entry.endDate === key || (entry.date < key && last >= key);
     }).sort(function (a, b) { return a.startAt.localeCompare(b.startAt); });
   }

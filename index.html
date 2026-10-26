@@ -70,13 +70,14 @@
 
       <section id="day-navigation" class="day-navigation" aria-label="Choose a day">
         <div class="date-toolbar">
-          <div class="date-switcher"><button type="button" class="icon-button" id="previous-day" aria-label="Previous day"><svg class="icon icon-back" aria-hidden="true"><use href="#i-chevron"/></svg></button><label class="date-picker-label"><span class="sr-only">View date</span><input type="date" id="date-picker" aria-label="View date"></label><button type="button" class="icon-button" id="next-day" aria-label="Next day"><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></button></div>
-          <button type="button" class="text-button today-button" id="today-button">Back to today <span aria-hidden="true">↗</span></button>
+          <div class="date-switcher"><button type="button" class="icon-button" id="previous-day" aria-label="Previous day"><svg class="icon icon-back" aria-hidden="true"><use href="#i-chevron"/></svg></button><label class="date-picker-label"><span class="sr-only">View date</span><input type="date" id="date-picker" aria-label="View date" min="0001-01-01" max="9999-12-31"></label><button type="button" class="icon-button" id="next-day" aria-label="Next day"><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></button></div>
+          <button type="button" class="text-button today-button" id="today-button">Back to today <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
         </div>
         <div id="week-strip" class="week-strip" aria-label="Week"></div>
       </section>
 
       <section id="today-view" aria-label="Your day">
+        <div id="schedule-glance" class="schedule-glance" aria-label="Upcoming schedule" hidden></div>
         <div class="day-view-switch" aria-label="Jump to a section"><button class="text-button" data-action="jump-section" data-target="today-map-panel">Your 24 hours <span aria-hidden="true">↓</span></button><button class="text-button" data-action="jump-section" data-target="daily-activities">Activities <span aria-hidden="true">↓</span></button><button class="text-button" data-action="log-earlier">+ Log earlier</button></div>
         <div class="dashboard-grid">
           <div class="day-main" id="daily-activities">
@@ -103,7 +104,7 @@
             <div class="day-map-heading"><div><p class="section-kicker" id="timeline-date">TODAY, HOUR BY HOUR</p><h2 id="timeline-heading">Your 24 hours.</h2></div><div class="day-map-tools"><button class="map-jump text-button" data-action="jump-now" data-map="today">Now</button><button class="map-jump text-button" data-action="jump-first" data-map="today">First entry</button></div></div>
             <div class="map-legend"><span class="legend-event">Events</span><span class="legend-recorded">Recorded</span><span class="legend-planned">Planned</span><span class="legend-running">In progress</span></div>
             <div id="timeline-list" class="day-map-body"></div>
-            <p class="day-map-footer">00:00 → 24:00 · Tap a moment for details. Scroll to explore.</p>
+            <p class="day-map-footer">Tap an open time to add an event. Tap a block for details.</p>
           </aside>
         </div>
       </section>
@@ -115,6 +116,7 @@
 
       <section id="history-view" aria-labelledby="history-heading" hidden>
         <h2 id="history-heading" class="sr-only">Calendar</h2>
+        <div class="calendar-controls"><div class="calendar-filters" role="group" aria-label="Show calendar items"><button type="button" data-calendar-filter="all" aria-pressed="true">All</button><button type="button" data-calendar-filter="events" aria-pressed="false">Events</button><button type="button" data-calendar-filter="records" aria-pressed="false">Recorded</button></div><label class="calendar-search"><span class="sr-only">Search this month</span><input type="search" id="calendar-search" placeholder="Search this month…" maxlength="160" autocomplete="off"></label></div>
         <div id="calendar-panel"></div>
         <div class="calendar-day-heading"><h2>Your day in detail</h2><button class="text-button" data-action="log-earlier">+ Log earlier</button></div>
         <div id="history-summary" class="day-summary"></div>
@@ -155,7 +157,7 @@
   <dialog id="settings-dialog" class="modal settings-modal" aria-labelledby="settings-title">
     <div class="modal-header"><div><p class="eyebrow">A SPACE THAT'S YOURS</p><h2 id="settings-title">Keep it close.</h2></div><button type="button" class="icon-button" data-close-dialog="settings-dialog" aria-label="Close settings"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
     <p id="settings-feedback" class="notice notice-update" role="status" hidden></p>
-    <section class="settings-section"><div class="settings-section-heading"><span class="settings-number">01</span><h3>Your data, in your hands</h3></div><p>Your activities and history stay on this device. There’s no account and no automatic sync. Keep a backup somewhere safe.</p><div class="settings-actions"><button type="button" class="button secondary-button" id="export-data"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download backup</button><label class="button file-button" for="restore-file">Restore a backup<input type="file" id="restore-file" accept=".json,application/json"></label></div><button type="button" id="export-legacy" class="text-button legacy-button" hidden>Download your previous ledger <span aria-hidden="true">↗</span></button><p class="field-hint" id="storage-status"></p><button type="button" class="text-button" id="request-persistence">Ask browser to keep data <span aria-hidden="true">↗</span></button></section>
+    <section class="settings-section"><div class="settings-section-heading"><span class="settings-number">01</span><h3>Your data, in your hands</h3></div><p>Your activities and history stay on this device. There’s no account and no automatic sync. Keep a backup somewhere safe.</p><div class="settings-actions"><button type="button" class="button secondary-button" id="export-data"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download backup</button><label class="button file-button" for="restore-file">Restore a backup<input type="file" id="restore-file" accept=".json,application/json"></label></div><button type="button" id="export-legacy" class="text-button legacy-button" hidden>Download your previous ledger <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button><p class="field-hint" id="storage-status"></p><button type="button" class="text-button" id="request-persistence">Ask browser to keep data <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></section>
     <section class="settings-section"><div class="settings-section-heading"><span class="settings-number">02</span><h3>A home on your iPhone</h3></div><p>Open this site in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. Open it once while online. After that, your day is available offline.</p><p class="field-hint">Already installed? Open Prokopē from your Home Screen for the full app experience.</p></section>
     <section class="settings-section"><div class="settings-section-heading"><span class="settings-number">03</span><h3>Time, without the effort</h3></div><p>Tap to save the time. Start and finish to keep both. Active timers survive closing the app; they use the times you recorded.</p><p class="field-hint">Planned times organize your list. They don’t send notifications. Times use your device’s local timezone.</p></section>
     <div class="settings-signoff"><svg class="icon" aria-hidden="true"><use href="#i-leaf"/></svg><span>A little more present. A little more intentional.</span></div>

@@ -328,6 +328,39 @@ test('a timer crossing midnight appears on both affected dates', () => {
   assert.equal(M.entriesForDate(state, '2026-01-03').length, 0);
 });
 
+test('a timer ending at captured local midnight does not create a record on the next day', () => {
+  for (const offset of [0, -540, 330]) {
+    const state = M.newState();
+    const finish = Date.parse('2026-01-02T00:00:00Z') + offset * 60000;
+    const entry = M.createManualEntry(state, {
+      title: 'Late reading', tracking: 'timer',
+      startAt: new Date(finish - 30 * 60000).toISOString(), startOffset: offset,
+      endAt: new Date(finish).toISOString(), endOffset: offset
+    }, at('2026-01-04T00:00:00Z'));
+    assert.equal(M.entriesForDate(state, '2026-01-01')[0].id, entry.id);
+    assert.equal(M.entriesForDate(state, '2026-01-02').length, 0);
+    M.updateEntry(state, entry.id, { endAt: new Date(finish + 1).toISOString() }, at('2026-01-04T00:00:00Z'));
+    assert.equal(M.entriesForDate(state, '2026-01-02')[0].id, entry.id, 'even one millisecond belongs to the finish day');
+  }
+});
+
+test('midnight actions, timers starting at midnight and date-line endpoints remain visible', () => {
+  const state = M.newState();
+  const instant = M.createManualEntry(state, {
+    title: 'Midnight action', tracking: 'check', startAt: '2026-01-02T00:00:00.000Z', startOffset: 0
+  }, at('2026-01-04T00:00:00Z'));
+  const zeroTimer = M.createManualEntry(state, {
+    title: 'Midnight timer', tracking: 'timer', startAt: '2026-01-02T00:00:00.000Z', startOffset: 0,
+    endAt: '2026-01-02T00:00:00.000Z', endOffset: 0
+  }, at('2026-01-04T00:00:00Z'));
+  const travel = M.createManualEntry(state, {
+    title: 'Date-line travel', tracking: 'timer', startAt: '2026-01-02T10:00:00.000Z', startOffset: -840,
+    endAt: '2026-01-02T12:00:00.000Z', endOffset: 720
+  }, at('2026-01-04T00:00:00Z'));
+  assert.deepEqual(M.entriesForDate(state, '2026-01-02').map(entry => entry.id), [instant.id, zeroTimer.id, travel.id]);
+  assert.equal(M.entriesForDate(state, '2026-01-03')[0].id, travel.id);
+});
+
 test('finishing before a timer starts is rejected without losing the active timer', () => {
   const state = M.newState();
   const task = M.createTask(state, { name: 'Read', kind: 'optional', tracking: 'timer' }, start);

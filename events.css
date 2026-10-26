@@ -46,3 +46,11 @@
   .event-color-options { gap: 1px; }
   .event-series-hint { font-size: 11px; }
 }
+.event-preview { display:flex; flex-direction:column; gap:4px; padding:11px 13px; margin:-4px 0 20px; border-left:3px solid var(--event-color,#55786a); border-radius:5px; background:var(--sage-light); background:color-mix(in srgb,var(--event-color,#55786a) 10%,var(--surface)); }
+#event-preview-name { font-size:12px; font-weight:600; overflow-wrap:anywhere; }
+#event-preview-time { font-size:11px; line-height:1.55; color:var(--muted); font-variant-numeric:tabular-nums; }
+.event-preview.is-invalid #event-preview-time { color:var(--danger); }
+.event-occurrence-actions > .text-button { margin-right:20px; }
+@media (max-width:760px) {
+  #event-preview-time { font-size:12px; }
+}

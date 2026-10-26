@@ -181,6 +181,7 @@ class PlannerBrowserTests(unittest.TestCase):
         self.page.locator('.calendar-agenda [data-action="edit-event"]').click()
         expect(self.page.locator("#event-series-hint")).to_be_visible()
         self.page.locator("#event-end").fill("07:00")
+        self.page.locator("#event-next-day").uncheck()
         self.page.locator("#event-save").click()
         expect(self.page.locator("#event-error")).to_be_visible()
         self.assertEqual(self.state()["tasks"][0]["schedule"]["endTime"], "")

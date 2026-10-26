@@ -88,3 +88,74 @@ test('rescheduling an already fulfilled one-time task does not create another to
   const data = C.buildData(state, '2026-01-03', '2026-01-31', '2026-01-01');
   assert.equal(data.selected.items.length, 0);
 });
+
+test('calendar filters keep events, records, and to-dos distinct without changing monthly totals', () => {
+  const state = M.newState();
+  event(state, { type: 'once', date: '2026-01-01', time: '09:00', endTime: '17:00' });
+  record(state, '2026-01-01T08:00:00.000Z', '2026-01-01T08:30:00.000Z');
+  M.createTask(state, { name: 'Take creatine', kind: 'routine', schedule: { type: 'daily', startDate: '2026-01-01' } }, now);
+  const saved = JSON.stringify(state);
+  const all = C.buildData(state, '2026-01-01', '2026-01-31', '2026-01-01');
+  const events = C.buildData(state, '2026-01-01', '2026-01-31', '2026-01-01', {filter: 'events'});
+  const records = C.buildData(state, '2026-01-01', '2026-01-31', '2026-01-01', {filter: 'records'});
+  assert.deepEqual(all.selected.items.map(item => item.type).sort(), ['event', 'record', 'task']);
+  assert.deepEqual(events.selected.items.map(item => item.type), ['event']);
+  assert.deepEqual(records.selected.items.map(item => item.type), ['record']);
+  assert.equal(events.monthMatches, 1);
+  assert.deepEqual(events.metrics, all.metrics);
+  assert.deepEqual(records.metrics, all.metrics);
+  assert.equal(JSON.stringify(state), saved);
+});
+
+test('calendar search matches multiple words across names, locations, and notes, ignoring accents and case', () => {
+  const state = M.newState();
+  event(state, { type: 'once', date: '2026-01-01', time: '09:00' }, {name: 'Doctor appointment', location: 'Café clinic', note: 'Bring insurance card'});
+  event(state, { type: 'once', date: '2026-01-03', time: '10:00' }, {name: 'Doctor appointment', location: 'Another clinic', note: 'Consultation'});
+  const selected = C.buildData(state, '2026-01-01', '2026-01-31', '2026-01-01', {filter: 'events', query: '  DOCTOR  cafe Insurance  '});
+  assert.equal(selected.selected.items.length, 1);
+  assert.equal(selected.monthMatches, 1);
+  assert.equal(selected.days.find(day => day.date === '2026-01-03').items.length, 0);
+  assert.equal(selected.metrics.events, 2);
+  const otherDate = C.buildData(state, '2026-01-03', '2026-01-31', '2026-01-01', {query: 'insurance'});
+  assert.equal(otherDate.selected.items.length, 0);
+  assert.equal(otherDate.monthMatches, 1);
+  assert.equal(otherDate.selected.date, '2026-01-03');
+});
+
+test('filtered empty days invite changing filters and keep full-month totals clearly labeled', () => {
+  const container = {innerHTML: ''};
+  C.render(container, {state: M.newState(), selected: '2026-01-01', today: '2026-01-31', filter: 'records', query: '<script>alert(1)</script>'});
+  assert.ok(container.innerHTML.includes('No matching items.'));
+  assert.ok(container.innerHTML.includes('0 matches this month'));
+  assert.ok(container.innerHTML.includes('FULL MONTH'));
+  assert.ok(!container.innerHTML.includes('A little open space.'));
+  assert.ok(!container.innerHTML.includes('<script>'));
+  assert.ok(container.innerHTML.includes('&lt;script&gt;'));
+});
+
+test('same-day calendar refresh preserves agenda scroll, but changing date or filters starts at the top', () => {
+  let agenda = {dataset: {date: '2026-01-01', filter: 'all', query: ''}, scrollTop: 245};
+  const container = {
+    get innerHTML() { return ''; },
+    set innerHTML(_) { agenda = {dataset: {}, scrollTop: 0}; },
+    querySelector() { return agenda; }
+  };
+  const options = {state: M.newState(), selected: '2026-01-01', today: '2026-01-31'};
+  C.render(container, options);
+  assert.equal(agenda.scrollTop, 245);
+  agenda.dataset = {date: '2026-01-01', filter: 'all', query: ''};
+  C.render(container, {...options, filter: 'events'});
+  assert.equal(agenda.scrollTop, 0);
+  agenda.dataset = {date: '2026-01-01', filter: 'all', query: ''};
+  agenda.scrollTop = 245;
+  C.render(container, {...options, selected: '2026-01-02'});
+  assert.equal(agenda.scrollTop, 0);
+});
+
+test('calendar boundary months stay inside supported dates', () => {
+  const first = C.buildData(M.newState(), '0001-01-01', '2026-01-31', '0001-01-01');
+  assert.equal(first.days[0].date, '0001-01-01');
+  const last = C.buildData(M.newState(), '9999-12-31', '2026-01-31', '9999-12-01');
+  assert.equal(last.days.at(-1).date, '9999-12-31');
+  assert.throws(() => C.shiftMonth('0001-01-01', -1));
+});
