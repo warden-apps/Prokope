@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f6f5f0">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="light dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Prokopē">
@@ -13,9 +13,11 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=3">
   <link rel="icon" type="image/png" href="apple-touch-icon.png?v=3">
+  <script src="theme.js"></script>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="calendar.css">
   <link rel="stylesheet" href="events.css">
+  <link rel="stylesheet" href="theme.css">
   <script src="model.js" defer></script>
   <script src="timeline.js" defer></script>
   <script src="calendar.js" defer></script>
@@ -34,6 +36,7 @@
     <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-log" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
     <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M20 3c-5-1-13 1-14 8-1 4 2 7 6 6 7-1 9-9 8-14Z"/><path d="M4 21 16 9"/></symbol>
   </svg>
 
@@ -83,7 +86,7 @@
           <div class="day-main" id="daily-activities">
             <div id="day-summary" class="day-summary"></div>
             <form id="quick-log-form" class="quick-log-form">
-              <label for="quick-log-name"><span class="quick-log-star" aria-hidden="true">✳</span> Just did something?</label>
+              <label for="quick-log-name"><svg class="icon quick-log-icon" aria-hidden="true"><use href="#i-log"/></svg> Just did something?</label>
               <div class="quick-log-fields"><input type="text" id="quick-log-name" maxlength="120" required placeholder="A walk, a good chapter, a small win…" autocomplete="off"><button type="submit" class="quick-log-button">Log now <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></div>
 
             </form>
@@ -155,8 +158,9 @@
   </dialog>
 
   <dialog id="settings-dialog" class="modal settings-modal" aria-labelledby="settings-title">
-    <div class="modal-header"><div><p class="eyebrow">A SPACE THAT'S YOURS</p><h2 id="settings-title">Keep it close.</h2></div><button type="button" class="icon-button" data-close-dialog="settings-dialog" aria-label="Close settings"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="modal-header"><div><p class="eyebrow">A SPACE THAT'S YOURS</p><h2 id="settings-title">Settings</h2></div><button type="button" class="icon-button" data-close-dialog="settings-dialog" aria-label="Close settings"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
     <p id="settings-feedback" class="notice notice-update" role="status" hidden></p>
+    <section class="settings-section appearance-section" aria-labelledby="appearance-heading"><div class="settings-section-heading"><h3 id="appearance-heading">Appearance</h3></div><div class="field"><label for="theme-preference">Theme</label><select id="theme-preference"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div></section>
     <section class="settings-section"><div class="settings-section-heading"><span class="settings-number">01</span><h3>Your data, in your hands</h3></div><p>Your activities and history stay on this device. There’s no account and no automatic sync. Keep a backup somewhere safe.</p><div class="settings-actions"><button type="button" class="button secondary-button" id="export-data"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download backup</button><label class="button file-button" for="restore-file">Restore a backup<input type="file" id="restore-file" accept=".json,application/json"></label></div><button type="button" id="export-legacy" class="text-button legacy-button" hidden>Download your previous ledger <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button><p class="field-hint" id="storage-status"></p><button type="button" class="text-button" id="request-persistence">Ask browser to keep data <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></section>
     <section class="settings-section"><div class="settings-section-heading"><span class="settings-number">02</span><h3>A home on your iPhone</h3></div><p>Open this site in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. Open it once while online. After that, your day is available offline.</p><p class="field-hint">Already installed? Open Prokopē from your Home Screen for the full app experience.</p></section>
     <section class="settings-section"><div class="settings-section-heading"><span class="settings-number">03</span><h3>Time, without the effort</h3></div><p>Tap to save the time. Start and finish to keep both. Active timers survive closing the app; they use the times you recorded.</p><p class="field-hint">Planned times organize your list. They don’t send notifications. Times use your device’s local timezone.</p></section>

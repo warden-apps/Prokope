@@ -1,13 +1,13 @@
 /* Bump this version whenever an app-shell asset changes. A complete shell is
    installed before activation, and core assets stay together until an update. */
-const CACHE_VERSION = 'prokope-daily-v5';
+const CACHE_VERSION = 'prokope-daily-v6';
 const SCOPE = new URL(self.registration.scope);
 const SCOPE_TAG = encodeURIComponent(SCOPE.pathname);
 const SHELL_CACHE = CACHE_VERSION + ':shell:' + SCOPE_TAG;
 const RUNTIME_CACHE = CACHE_VERSION + ':runtime:' + SCOPE_TAG;
 const CORE = [
   './', './index.html', './styles.css', './model.js', './app.js',
-  './timeline.js', './calendar.js', './calendar.css', './events-ui.js', './events.css', './manifest.json', './apple-touch-icon.png', './icon-512.png'
+  './theme.js', './theme.css', './timeline.js', './calendar.js', './calendar.css', './events-ui.js', './events.css', './manifest.json', './apple-touch-icon.png', './icon-512.png'
 ].map(path => new URL(path, SCOPE).href);
 const CORE_URLS = new Set(CORE);
 const INDEX_URL = new URL('./index.html', SCOPE).href;

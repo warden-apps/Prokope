@@ -40,9 +40,11 @@ Updates download in the background when online. Apply the available update in th
 
 ## Your data
 
+Choose **Settings → Appearance → Theme** for Light, Dark, or System. System follows your device; Dark uses warm forest surfaces with sage and copper accents. Your choice is remembered on this device and works offline.
+
 Everything is stored in this browser on this device. Nothing is sent to a server, and there is no automatic sync between devices. Use the backup controls in Settings to export a JSON copy and restore it later. Keep a backup outside the browser: clearing site data, removing the app, private browsing, or browser storage eviction can remove local records. Installing the app does not replace backups.
 
-Restore validates the file before replacing the current tracker. Export your current data first if you want to keep both copies. Archived activities retain their existing history.
+Restore validates the file before replacing the current tracker. Export your current data first if you want to keep both copies. Archiving hides an activity from your daily lists, keeps its history, and lets you restore it from Activities. It does not delete the activity. These text records are small; a recurring schedule is saved once, not as an endless list of future dates. Settings shows the size of your JSON backup, including archived activities and records, rather than the browser's total storage usage.
 
 The previous nightly ledger is left untouched under its original `keikoroku.v1` storage key. The new tracker uses separate storage. Settings can export the old ledger so an app update does not discard it; it is not automatically converted into activity entries.
 
@@ -64,6 +66,7 @@ node --test tests/*.test.js
 python3 tests/browser_smoke.py
 python3 tests/browser_planner.py
 python3 tests/browser_polish.py
+python3 tests/browser_theme.py
 ```
 
 The browser smoke test requires Python Playwright and Chromium as development tools, and the local server running on port 8000. They are not runtime dependencies of the app.
@@ -75,6 +78,8 @@ Commit the app files, then choose **Settings → Pages → Deploy from a branch 
 ```text
 index.html              application shell
 styles.css              responsive layout
+theme.js                saved appearance and device theme preference
+theme.css               warm dark palette
 model.js                scheduling and records
 timeline.js             24-hour geometry and recorded time handling
 calendar.js             month grid, agenda, and planned/recorded totals

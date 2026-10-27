@@ -622,7 +622,9 @@
     var legacy = false, safetyCopy = false;
     try { legacy = !!localStorage.getItem(LEGACY_KEY); safetyCopy = !!localStorage.getItem(KEY + '.before-restore'); } catch (_) { /* Show storage status below. */ }
     $('export-legacy').hidden = !legacy;
-    $('storage-status').textContent = storageLocked ? 'Saved data could not be opened. Download a recovery copy before restoring.' : state.tasks.length + ' activities · ' + state.entries.length + ' records · Stored on this device';
+    var backupBytes = new Blob([JSON.stringify({ format: 'prokope-daily', version: 1, exportedAt: new Date().toISOString(), data: state }, null, 2)]).size;
+    var backupSize = backupBytes < 1024 ? backupBytes + ' B' : backupBytes < 1048576 ? Math.ceil(backupBytes / 1024) + ' KB' : (backupBytes / 1048576).toFixed(1) + ' MB';
+    $('storage-status').textContent = storageLocked ? 'Saved data could not be opened. Download a recovery copy before restoring.' : state.tasks.length + ' activities · ' + state.entries.length + ' records · Backup: ' + backupSize;
     // Expose the retained restore safety copy without adding another destructive action.
     var safetyButton = $('export-safety-copy');
     if (!safetyButton) {
