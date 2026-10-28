@@ -28,6 +28,38 @@ LEGACY = json.dumps({"v": 3, "days": {"2026-10-24": {"jrnl": "An existing ledger
 NOON = datetime(2026, 10, 25, 3, 0, tzinfo=timezone.utc)
 
 
+def show_today_panel(page, panel):
+    button = page.locator(f'[data-today-panel="{panel}"]')
+    if button.get_attribute("aria-pressed") != "true":
+        button.click()
+    expect(button).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("#today-map-panel" if panel == "timeline" else "#daily-activities")).to_be_visible()
+
+
+def open_calendar_details(page):
+    details = page.locator("#calendar-day-details")
+    if not details.evaluate("el => el.open"):
+        details.locator("summary").first.click()
+    expect(page.locator("#history-timeline")).to_be_visible()
+
+
+def open_calendar_totals(page):
+    details = page.locator(".calendar-totals")
+    if not details.evaluate("el => el.open"):
+        details.locator("summary").click()
+    expect(page.locator(".calendar-insights")).to_be_visible()
+
+
+def select_calendar_date(page, date):
+    day = page.locator(f'[data-action="calendar-day"][data-date="{date}"]')
+    if day.count():
+        day.click()
+    else:
+        page.locator("#calendar-date-picker").fill(date)
+        page.locator("#calendar-date-picker").dispatch_event("change")
+    expect(page.locator(f'[data-action="calendar-day"][data-date="{date}"]')).to_have_attribute("aria-pressed", "true")
+
+
 class ProkopeBrowserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -109,6 +141,7 @@ class ProkopeBrowserTests(unittest.TestCase):
     def quick_log(self, title):
         self.page.locator("#quick-log-name").fill(title)
         self.page.locator('#quick-log-form button[type="submit"]').click()
+        show_today_panel(self.page, "timeline")
         expect(self.page.locator("#timeline-list")).to_contain_text(title)
 
     def switch_view(self, name):
@@ -125,12 +158,14 @@ class ProkopeBrowserTests(unittest.TestCase):
         self.assertEqual(entries[0]["startAt"], "2026-10-24T15:00:00.000Z")
         self.assertEqual(entries[0]["date"], "2026-10-25")
         self.assertEqual(entries[0]["endAt"], entries[0]["startAt"])
+        show_today_panel(self.page, "timeline")
         expect(self.page.locator("#timeline-list")).to_contain_text("Take creatine")
         expect(self.page.locator("#timeline-list")).to_contain_text(re.compile(r"00[:.]00"))
         if button.count():
             expect(button).to_be_disabled()
         self.page.reload(wait_until="networkidle")
         self.assertEqual(len(self.state()["entries"]), 1)
+        show_today_panel(self.page, "tasks")
         expect(self.page.locator("#routine-list .is-done")).to_contain_text("Take creatine")
         self.assertEqual(self.page.evaluate("localStorage.getItem('keikoroku.v1')"), LEGACY)
         self.assert_no_horizontal_overflow()
@@ -148,9 +183,11 @@ class ProkopeBrowserTests(unittest.TestCase):
         finished = self.state()["entries"][0]
         self.assertEqual(finished["endAt"], "2026-10-25T03:25:00.000Z")
         self.assertEqual(finished["endDate"], "2026-10-25")
+        show_today_panel(self.page, "timeline")
         expect(self.page.locator("#timeline-list")).to_contain_text("Read a book")
         self.assertEqual(len(self.state()["entries"]), 1)
         # Optional activities can be done again, without losing the earlier session.
+        show_today_panel(self.page, "tasks")
         self.page.locator(f'#optional-list [data-action="start"][data-id="{task["id"]}"]').click()
         self.assertEqual(len(self.state()["entries"]), 2)
         self.assert_no_horizontal_overflow()
@@ -192,11 +229,12 @@ class ProkopeBrowserTests(unittest.TestCase):
         self.assertEqual(len(entries), 2)
         self.assertEqual(entries[-1]["startAt"], "2026-10-25T03:00:00.000Z")
         self.switch_view("history")
-        self.page.locator("#previous-day").click()
+        select_calendar_date(self.page, "2026-10-24")
+        open_calendar_details(self.page)
         expect(self.page.locator("#history-timeline")).to_contain_text("Yesterday evening walk")
         expect(self.page.locator("#history-timeline")).not_to_contain_text("Put the laundry away")
         expect(self.page.locator("#history-timeline")).to_contain_text(re.compile(r"18[:.]15"))
-        self.page.locator("#today-button").click()
+        self.page.locator('[data-action="calendar-today"]').click()
         expect(self.page.locator("#history-timeline")).to_contain_text("Put the laundry away")
         self.assert_no_horizontal_overflow()
 
@@ -232,19 +270,23 @@ class ProkopeBrowserTests(unittest.TestCase):
         self.page.locator("#task-name").fill("Take creatine with lunch")
         self.page.locator('#task-form button[type="submit"]').click()
         expect(self.page.locator("#routine-list")).to_contain_text("Take creatine with lunch")
+        show_today_panel(self.page, "timeline")
         expect(self.page.locator("#timeline-list")).to_contain_text("Morning creatine")
         self.assertEqual(self.state()["entries"][0], original)
+        show_today_panel(self.page, "tasks")
         self.page.locator(f'#routine-list [data-action="edit"][data-id="{task["id"]}"]').click()
         self.page.locator("#task-archive").click()
         self.page.locator("#confirm-accept").click()
         expect(self.page.locator("#task-dialog")).not_to_be_visible()
         expect(self.page.locator("#routine-list")).not_to_contain_text("Take creatine with lunch")
+        show_today_panel(self.page, "timeline")
         expect(self.page.locator("#timeline-list")).to_contain_text("Morning creatine")
         self.switch_view("library")
         self.page.locator("#show-archived").check()
         self.page.locator(f'#library-list [data-action="restore-task"][data-id="{task["id"]}"]').click()
         self.assertIsNone(self.state()["tasks"][0]["archivedAt"])
         self.switch_view("today")
+        show_today_panel(self.page, "tasks")
         expect(self.page.locator("#routine-list .is-done")).to_contain_text("Take creatine with lunch")
         self.assertEqual(self.state()["entries"][0], original)
 
@@ -312,6 +354,7 @@ class ProkopeBrowserTests(unittest.TestCase):
             return task.id;
         }""", STORAGE_KEY)
         self.page.reload(wait_until="networkidle")
+        show_today_panel(self.page, "tasks")
         self.page.locator(f'#routine-list [data-action="edit"][data-id="{task_id}"]').click()
         self.page.locator("#task-kind").select_option("planned")
         self.page.locator("#task-name").fill("A single long walk")
@@ -377,8 +420,8 @@ class ProkopeBrowserTests(unittest.TestCase):
             page.clock.set_fixed_time(NOON)
             page.goto(BASE, wait_until="networkidle")
             page.locator('[data-view="history"]:visible').first.click()
-            page.locator("#date-picker").fill("2026-10-25")
-            page.locator("#date-picker").dispatch_event("change")
+            select_calendar_date(page, "2026-10-25")
+            open_calendar_details(page)
             expect(page.locator("#history-timeline")).to_contain_text("An early hour of reading")
             expect(page.locator("#history-timeline")).to_contain_text(re.compile(r"01[:.]00"))
             expect(page.locator("#history-timeline")).to_contain_text(re.compile(r"02[:.]00"))
@@ -404,12 +447,15 @@ class ProkopeBrowserTests(unittest.TestCase):
         expect(labels).to_have_count(25)
         self.assertEqual(labels.all_text_contents(), [f"{hour:02d}:00" for hour in range(25)])
         task = self.create_task("Morning supplement", time="09:30")
+        show_today_panel(self.page, "timeline")
         planned = self.page.locator(f'#timeline-list .is-planned[data-task-id="{task["id"]}"]')
         expect(planned).to_have_count(1)
         self.assertAlmostEqual(float(planned.get_attribute("data-start-minute")), 570)
         self.assertEqual(self.state()["entries"], [])
+        show_today_panel(self.page, "tasks")
         self.page.locator(f'#routine-list [data-action="complete"][data-id="{task["id"]}"]').click()
         entry = self.state()["entries"][0]
+        show_today_panel(self.page, "timeline")
         actual = self.page.locator(f'#timeline-list .map-event[data-entry-id="{entry["id"]}"]')
         expect(actual).to_have_count(1)
         self.assertAlmostEqual(float(actual.get_attribute("data-start-minute")), 720)
@@ -432,8 +478,9 @@ class ProkopeBrowserTests(unittest.TestCase):
         expect(now).to_contain_text("12:01")
         self.assertNotEqual(now.get_attribute("style"), before)
         page.locator('[data-view="history"]:visible').first.click()
-        page.locator("#previous-day").click()
+        select_calendar_date(page, "2026-10-24")
         expect(page.locator("#date-picker")).to_have_value("2026-10-24")
+        open_calendar_details(page)
         expect(page.locator("#history-timeline .hour-label")).to_have_count(25)
         expect(page.locator("#history-timeline .now-line")).to_have_count(0)
         page.close()
@@ -497,6 +544,7 @@ class ProkopeBrowserTests(unittest.TestCase):
                 localStorage.setItem(key, JSON.stringify(state));
             }""", STORAGE_KEY)
             page.reload(wait_until="networkidle")
+            show_today_panel(page, "tasks")
             summary = page.locator("#day-summary .summary-card").filter(has_text="Planned & routine")
             expect(summary.locator(".summary-value")).to_have_text(re.compile(r"0\s*/\s*2"))
             expect(page.locator("#planned-list")).to_contain_text("Yesterday’s unfinished plan")
@@ -540,7 +588,8 @@ class ProkopeBrowserTests(unittest.TestCase):
         self.assertAlmostEqual(float(segment.get_attribute("data-start-minute")), 0)
         self.assertAlmostEqual(float(segment.get_attribute("data-end-minute")), 20)
         self.switch_view("history")
-        self.page.locator("#previous-day").click()
+        select_calendar_date(self.page, "2026-10-24")
+        open_calendar_details(self.page)
         segment = self.page.locator(f'#history-timeline .map-event[data-entry-id="{ids["overnight"]}"]')
         self.assertAlmostEqual(float(segment.get_attribute("data-start-minute")), 1430)
         self.assertAlmostEqual(float(segment.get_attribute("data-end-minute")), 1440)
@@ -591,7 +640,8 @@ class ProkopeBrowserTests(unittest.TestCase):
 
     def test_add_earlier_activity_and_find_it_across_history(self):
         self.switch_view("history")
-        self.page.locator("#previous-day").click()
+        select_calendar_date(self.page, "2026-10-24")
+        open_calendar_details(self.page)
         self.page.locator('[data-action="log-earlier"]:visible').first.click()
         expect(self.page.locator("#record-date")).to_have_value("2026-10-24")
         self.page.locator("#record-title").fill("Work in the garden")
@@ -607,7 +657,7 @@ class ProkopeBrowserTests(unittest.TestCase):
         self.assertEqual(entry["startAt"], "2026-10-24T00:00:00.000Z")
         self.assertEqual(entry["endAt"], "2026-10-24T00:45:00.000Z")
         expect(self.page.locator("#history-timeline")).to_contain_text("Work in the garden")
-        self.page.locator("#today-button").click()
+        self.page.locator('[data-action="calendar-today"]').click()
         expect(self.page.locator("#history-timeline")).not_to_contain_text("Work in the garden")
         self.page.locator("#history-search").fill("tomatoes")
         expect(self.page.locator("#history-records")).to_contain_text("Work in the garden")

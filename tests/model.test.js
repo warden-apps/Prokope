@@ -709,3 +709,98 @@ test('record metadata remains optional but is validated in restored backups', ()
   assert.deepEqual(state, before);
   assert.equal({}.polluted, undefined);
 });
+
+test('deleting an activity keeps finished history and its captured details by default', () => {
+  const state = M.newState();
+  const task = routine(state, { color: '#8067a3' });
+  const first = M.completeTask(state, task.id, at('2026-01-01T10:00:00Z'));
+  M.updateEntry(state, first.id, {
+    title: 'Creatine after lunch', note: 'Five grams', color: '#b4647a',
+    startAt: '2026-01-02T12:03:00.123Z', startOffset: -540
+  }, at('2026-01-03T12:00:00Z'));
+  const before = clone(first);
+  assert.equal(M.deleteTask(state, task.id), task);
+  assert.deepEqual(state.tasks, []);
+  assert.deepEqual(state.entries, [{ ...before, taskId: null, kind: 'quick' }]);
+  assert.equal(first.occurrenceDate, '2026-01-01');
+  assert.equal(M.entriesForDate(state, '2026-01-02')[0].id, before.id);
+  assert.equal(M.validateState(clone(state)), true);
+  // The detached record remains editable and can be independently deleted.
+  M.updateEntry(state, first.id, { note: 'Saved independently' }, at('2026-01-03T12:00:00Z'));
+  assert.equal(M.validateState(clone(state)), true);
+  M.deleteEntry(state, first.id);
+  assert.deepEqual(state.entries, []);
+});
+
+test('deleting an archived timer activity retains completed sessions across midnight', () => {
+  const state = M.newState();
+  const task = M.createTask(state, { name: 'Read', kind: 'optional', tracking: 'timer', color: '#447b9b' }, start);
+  const entry = M.startTask(state, task.id, at('2026-01-01T23:45:00Z'));
+  M.finishEntry(state, entry.id, at('2026-01-02T00:20:00Z'));
+  M.archiveTask(state, task.id, at('2026-01-02T09:00:00Z'));
+  const before = clone(entry);
+  M.deleteTask(state, task.id, { deleteRecords: false });
+  assert.deepEqual(state.entries, [{ ...before, taskId: null, kind: 'quick' }]);
+  assert.equal(M.entriesForDate(state, '2026-01-01')[0].id, entry.id);
+  assert.equal(M.entriesForDate(state, '2026-01-02')[0].id, entry.id);
+  assert.equal(M.validateState(clone(state)), true);
+});
+
+test('deleting an activity with records removes only records linked to that activity', () => {
+  const state = M.newState();
+  const removed = routine(state), kept = routine(state);
+  M.completeTask(state, removed.id, at('2026-01-01T09:00:00Z'));
+  M.completeTask(state, removed.id, at('2026-01-02T09:00:00Z'));
+  M.completeTask(state, kept.id, at('2026-01-01T09:05:00Z'));
+  M.logEntry(state, removed.name, at('2026-01-01T09:10:00Z'));
+  const remaining = clone(state.entries.filter(entry => entry.taskId !== removed.id));
+  M.deleteTask(state, removed.id, { deleteRecords: true });
+  assert.deepEqual(state.tasks, [kept]);
+  assert.deepEqual(state.entries, remaining);
+  assert.equal(M.validateState(clone(state)), true);
+});
+
+test('deleting any activity with a running timer is rejected without partial mutation', () => {
+  const state = M.newState();
+  const task = M.createTask(state, { name: 'Read', kind: 'optional', tracking: 'timer' }, start);
+  const finished = M.startTask(state, task.id, at('2026-01-01T09:00:00Z'));
+  M.finishEntry(state, finished.id, at('2026-01-01T09:30:00Z'));
+  const running = M.startTask(state, task.id, at('2026-01-01T10:00:00Z'));
+  M.archiveTask(state, task.id, at('2026-01-01T10:10:00Z'));
+  const before = clone(state);
+  for (const options of [undefined, { deleteRecords: false }, { deleteRecords: true }]) {
+    assert.throws(() => M.deleteTask(state, task.id, options), /Finish or remove the running timer/);
+    assert.deepEqual(state, before);
+  }
+  M.finishEntry(state, running.id, at('2026-01-01T11:00:00Z'));
+  M.deleteTask(state, task.id);
+  assert.equal(state.entries.length, 2);
+  assert.equal(M.validateState(clone(state)), true);
+});
+
+test('deleting an event series removes past and future calendar appearances only for that series', () => {
+  const state = M.newState();
+  const removed = event(state), kept = event(state);
+  const record = M.logEntry(state, 'Work', at('2026-01-01T10:00:00Z'));
+  M.skipEvent(state, removed.id, '2026-01-02');
+  M.archiveTask(state, removed.id, at('2026-01-03T12:00:00Z'));
+  assert.equal(M.eventOccurrencesForDate(state, '2026-01-01').length, 2);
+  M.deleteTask(state, removed.id, { deleteRecords: true });
+  for (const date of ['2026-01-01', '2026-01-02', '2026-01-04']) {
+    assert.deepEqual(M.eventOccurrencesForDate(state, date).map(item => item.task.id), [kept.id]);
+  }
+  assert.deepEqual(state.entries, [record]);
+  assert.equal(M.validateState(clone(state)), true);
+});
+
+test('missing activities and invalid delete choices cannot remove any saved data', () => {
+  const state = M.newState(), task = routine(state);
+  M.completeTask(state, task.id, start);
+  const before = clone(state);
+  for (const options of [null, true, [], { deleteRecords: 'true' }, { deleteRecords: 1 }, { unrelated: true }]) {
+    assert.throws(() => M.deleteTask(state, task.id, options), /Choose whether/);
+    assert.deepEqual(state, before);
+  }
+  assert.throws(() => M.deleteTask(state, 'missing', { deleteRecords: true }), /no longer available/);
+  assert.deepEqual(state, before);
+});

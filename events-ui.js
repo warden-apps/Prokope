@@ -40,7 +40,7 @@
       '<details id="event-details" class="event-details"><summary>Location &amp; notes</summary><div class="field"><label for="event-location">Location</label><input id="event-location" maxlength="160" placeholder="Place or address" autocomplete="off"></div><div class="field"><label for="event-note">Notes</label><textarea id="event-note" maxlength="1000" rows="3" placeholder="Anything to remember"></textarea></div></details>' +
       '<div id="event-occurrence-actions" class="event-occurrence-actions" hidden><button type="button" id="event-duplicate" class="text-button">Duplicate</button><button type="button" id="event-skip" class="text-button">Skip this date</button><details id="event-skipped" hidden><summary>Skipped dates</summary><div id="event-skipped-list"></div></details></div>' +
       '<p id="event-error" class="form-error" role="alert" hidden></p>' +
-      '<div class="modal-footer event-footer"><button type="button" id="event-archive" class="text-button danger-text" hidden>Archive event</button><button type="button" id="event-restore" class="text-button" hidden>Restore event</button><button type="submit" id="event-save" class="button primary-button">Save event <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></div>' +
+      '<div class="modal-footer event-footer"><div class="editor-secondary-actions"><button type="button" id="event-archive" class="text-button" hidden>Archive event</button><button type="button" id="event-restore" class="text-button" hidden>Restore event</button><button type="button" id="event-delete" class="text-button danger-text" hidden>Delete</button></div><button type="submit" id="event-save" class="button primary-button">Save event <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></div>' +
       '</form>';
     document.body.appendChild(dialog);
     var $ = function (id) { return dialog.querySelector('#' + id); };
@@ -160,6 +160,7 @@
       $('event-archive').hidden = !current || archived;
       $('event-archive').textContent = current && current.schedule.type !== 'once' ? 'Archive series' : 'Archive event';
       $('event-restore').hidden = !archived;
+      $('event-delete').hidden = !current;
       $('event-save').hidden = !!archived;
     }
     function open(id, date, time) {
@@ -283,6 +284,9 @@
     });
     $('event-restore').addEventListener('click', function () {
       if (saveChange(function (state) { return M.restoreTask(state, taskId); })) { dialog.close(); options.toast('Event restored.'); }
+    });
+    $('event-delete').addEventListener('click', async function () {
+      if (await options.deleteTask(taskId, taskOriginal)) dialog.close();
     });
     return { open: open, hasUnsavedChanges: function () { return dialog.open && formSnapshot() !== formOriginal; } };
   }

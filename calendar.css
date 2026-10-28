@@ -59,6 +59,11 @@
 .calendar-insight > strong { font:29px var(--serif); letter-spacing:-.7px; font-weight:400; white-space:nowrap; }
 .calendar-insight > span { font-size:11px; line-height:1.4; }
 .calendar-insight small { display:block; font-size:9px; color:var(--muted); margin-top:3px; }
+.calendar-totals { margin-top:18px; border-top:1px solid var(--line); }
+.calendar-totals > summary { min-height:48px; padding:15px 2px; color:var(--muted); font-size:13px; font-weight:600; cursor:pointer; }
+.calendar-totals > summary:hover { color:var(--ink); }
+.calendar-totals > summary:focus-visible { outline:2px solid var(--sage-ink); outline-offset:3px; border-radius:3px; }
+.calendar-totals > .calendar-insights { margin:0 0 16px; }
 @media (max-width:1250px) {
   .calendar-workspace { grid-template-columns:minmax(0,1fr); gap:18px; }
   .calendar-agenda-list { grid-template-columns:repeat(2,minmax(0,1fr)); max-height:400px; }

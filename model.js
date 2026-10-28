@@ -193,6 +193,25 @@
     task.archivedDate = null;
     return task;
   }
+  function deleteTask(state, taskId, options) {
+    var task = getTask(state, taskId);
+    options = options === undefined ? {} : options;
+    if (!plain(options) || !safeTree(options, 0) ||
+        Object.keys(options).some(function (key) { return key !== 'deleteRecords'; }) ||
+        (options.deleteRecords !== undefined && typeof options.deleteRecords !== 'boolean')) fail('Choose whether to keep or delete this activity’s records.');
+    // A running session must stay linked until the user finishes or removes it.
+    // Check before either collection changes, including when deleting history.
+    if (activeEntries(state).some(function (entry) { return entry.taskId === taskId; })) fail('Finish or remove the running timer before deleting this activity.');
+    if (options.deleteRecords) {
+      state.entries = state.entries.filter(function (entry) { return entry.taskId !== taskId; });
+    } else {
+      state.entries.forEach(function (entry) {
+        if (entry.taskId === taskId) { entry.taskId = null; entry.kind = 'quick'; }
+      });
+    }
+    state.tasks.splice(state.tasks.indexOf(task), 1);
+    return task;
+  }
   function isDue(task, key) {
     if (!task || !task.schedule || !validDate(key)) return false;
     var schedule = task.schedule;
@@ -459,7 +478,7 @@
 
   return {
     localDate: localDate, addDays: addDays, newState: newState,
-    createTask: createTask, updateTask: updateTask, archiveTask: archiveTask, restoreTask: restoreTask,
+    createTask: createTask, updateTask: updateTask, archiveTask: archiveTask, restoreTask: restoreTask, deleteTask: deleteTask,
     isDue: isDue, tasksForDate: tasksForDate, scheduleLabel: scheduleLabel,
     eventOccurrencesForDate: eventOccurrencesForDate, skipEvent: skipEvent, restoreEventOccurrence: restoreEventOccurrence,
     completeTask: completeTask, startTask: startTask, finishEntry: finishEntry, logEntry: logEntry,
