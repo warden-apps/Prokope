@@ -28,6 +28,7 @@ class PolishBrowserTests(unittest.TestCase):
         self.quick_log('Breakfast')
         self.calendar()
         before = self.state()
+        smoke.open_calendar_totals(self.page)
         totals = self.page.locator('.calendar-insights').inner_text()
         self.page.locator('[data-calendar-filter="events"]').click()
         expect(self.page.locator('.calendar-agenda')).to_contain_text('Doctor')

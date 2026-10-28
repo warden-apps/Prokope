@@ -9,14 +9,18 @@
   var selected = M.localDate(), today = selected, view = 'today';
   var undoAction = null, toastTimer, waitingWorker, updateRequested = false;
   var confirmResolve = null, restoreBusy = false;
+  var deletion = null;
   var clockMinute = '', recordOriginal = null, taskOriginal = null;
   var calendarFilter = 'all';
+  var todayPanel = 'timeline';
   var mapDates = { today: '', history: '' };
+  var mapPositions = {};
   var calendarMonth = selected.slice(0, 7) + '-01', calendarSelected = selected;
   var eventEditor = window.ProkopeEvents.init({
     getState: function () { return state; }, getDate: function () { return selected; },
-    transact: transact, toast: toast, confirm: confirmAction,
+    transact: transact, toast: toast, confirm: confirmAction, deleteTask: requestTaskDeletion,
     onCreated: function (task) {
+      todayPanel = 'timeline';
       var date = task.schedule.date || (task.schedule.startDate > selected ? task.schedule.startDate : selected);
       // Open the next occurrence so a newly saved future event is easy to find.
       for (var i = 0; task.schedule.type !== 'once' && !M.isDue(task, date) && i < 3650; i++) {
@@ -39,20 +43,26 @@
       calendarMonth = selected.slice(0, 7) + '-01'; calendarSelected = selected;
       calendarFilter = ['all', 'events', 'records'].includes(saved.filter) ? saved.filter : 'all';
       $('calendar-search').value = typeof saved.query === 'string' ? saved.query.slice(0, 160) : '';
+      todayPanel = saved.todayPanel === 'tasks' ? 'tasks' : 'timeline';
+      $('library-kind').value = ['all', 'event', 'routine', 'planned', 'optional'].includes(saved.libraryKind) ? saved.libraryKind : 'all';
+      $('library-search').value = typeof saved.libraryQuery === 'string' ? saved.libraryQuery.slice(0, 160) : '';
+      $('show-archived').checked = saved.showArchived === true;
+      $('calendar-day-details').open = saved.dayDetails === true;
     } catch (_) { /* A private or expired session can always start at today. */ }
   }
   function rememberView() {
-    try { sessionStorage.setItem('prokope.view.v1', JSON.stringify({ view: view, selected: selected, today: today, filter: calendarFilter, query: $('calendar-search').value })); }
+    try { sessionStorage.setItem('prokope.view.v1', JSON.stringify({ view: view, selected: selected, today: today, filter: calendarFilter, query: $('calendar-search').value, todayPanel: todayPanel, libraryKind: $('library-kind').value, libraryQuery: $('library-search').value, showArchived: $('show-archived').checked, dayDetails: $('calendar-day-details').open })); }
     catch (_) { /* Navigation still works when session storage is unavailable. */ }
   }
   function renderCalendar() {
     if (view !== 'history') return;
+    $('calendar-date-picker').value = selected;
     document.querySelectorAll('[data-calendar-filter]').forEach(function (button) { button.setAttribute('aria-pressed', String(button.dataset.calendarFilter === calendarFilter)); });
     window.ProkopeCalendar.render($('calendar-panel'), { state: state, selected: selected, today: today, month: calendarMonth, filter: calendarFilter, query: $('calendar-search').value });
   }
   function renderGlance() {
     var container = $('schedule-glance');
-    if (view !== 'today' || selected !== today) { container.hidden = true; return; }
+    if (view !== 'today' || selected !== today || todayPanel !== 'timeline') { container.hidden = true; return; }
     var minute = T.minutesAt(new Date());
     var events = M.eventOccurrencesForDate(state, today).filter(function (item) { return !item.allDay; });
     var current = events.filter(function (item) { return !item.point && item.startMinute <= minute && item.endMinute > minute; }).sort(function (a, b) { return a.endMinute - b.endMinute; });
@@ -188,6 +198,64 @@
     $('confirm-dialog').close();
     if (confirmResolve) { var resolve = confirmResolve; confirmResolve = null; resolve(value); }
   }
+  function requestTaskDeletion(id, original) {
+    if (deletion) return Promise.resolve(false);
+    var task = state.tasks.find(function (item) { return item.id === id; });
+    if (!task) { toast('This item is no longer available.'); return Promise.resolve(false); }
+    var records = state.entries.filter(function (entry) { return entry.taskId === id; });
+    var event = task.kind === 'event', series = event && task.schedule.type !== 'once';
+    var label = series ? 'series' : event ? 'event' : 'activity';
+    $('delete-task-title').textContent = 'Delete ' + label + '?';
+    $('delete-task-message').textContent = 'Permanently delete “' + task.name + '”' + (series ? ' and all its past and future dates' : event ? ' from the calendar' : ' from your activities') + '. This cannot be undone.';
+    $('delete-task-confirm').textContent = 'Delete ' + label;
+    $('delete-task-confirm').disabled = false;
+    $('delete-task-records').checked = false;
+    $('delete-records-choice').hidden = event || !records.length;
+    $('delete-records-label').textContent = 'Also delete ' + records.length + ' past record' + (records.length === 1 ? '' : 's');
+    $('delete-records-hint').textContent = event ? 'Use Archive instead to keep past calendar dates.' : records.length ? 'Your past records will stay on the timeline.' : 'There are no past records for this activity.';
+    $('delete-task-error').hidden = true;
+    var error = JSON.stringify(task) !== original ? 'This item changed in another window. Cancel and reopen it before deleting.' : records.some(function (entry) { return entry.endAt === null; }) ? 'Finish or remove the running timer before deleting this activity.' : '';
+    if (error) {
+      $('delete-task-error').textContent = error;
+      $('delete-task-error').hidden = false;
+      $('delete-task-confirm').disabled = true;
+    }
+    var promise = new Promise(function (resolve) {
+      deletion = { id: id, original: original, records: JSON.stringify(records), event: event, resolve: resolve };
+    });
+    $('delete-task-dialog').showModal();
+    $('delete-task-cancel').focus();
+    return promise;
+  }
+  function closeTaskDeletion(deleted) {
+    var pending = deletion;
+    deletion = null;
+    $('delete-task-dialog').close();
+    if (pending) pending.resolve(deleted);
+  }
+  function confirmTaskDeletion() {
+    if (!deletion || $('delete-task-confirm').disabled) return;
+    var pending = deletion, removeRecords = !pending.event && $('delete-task-records').checked;
+    var message = '';
+    var result = transact(function (draft) {
+      var task = draft.tasks.find(function (item) { return item.id === pending.id; });
+      var records = draft.entries.filter(function (entry) { return entry.taskId === pending.id; });
+      // The confirmation describes a particular activity and record count.
+      // A second window must not silently expand or change that deletion.
+      if (JSON.stringify(task) !== pending.original || JSON.stringify(records) !== pending.records) {
+        throw new Error('This item or its records changed in another window. Cancel and reopen it before deleting.');
+      }
+      return M.deleteTask(draft, pending.id, { deleteRecords: removeRecords });
+    }, { onError: function (error) { message = error.message; } });
+    if (result) {
+      closeTaskDeletion(true);
+      toast(pending.event ? 'Event deleted.' : removeRecords ? 'Activity and its records deleted.' : 'Activity deleted. Past records kept.');
+    } else {
+      $('delete-task-error').textContent = message || 'Could not delete. Your saved data has not been changed.';
+      $('delete-task-error').hidden = false;
+      $('delete-task-confirm').disabled = true;
+    }
+  }
   function empty(title, detail, action) {
     return '<div class="empty-state"><strong>' + escape(title) + '</strong><p>' + escape(detail) + '</p>' + (action || '') + '</div>';
   }
@@ -227,6 +295,7 @@
     if (active && !library) meta = 'Started ' + clock(active.startAt, active.startOffset) + ' · ' + elapsed(active);
     if (library && task.archivedAt) {
       actions = actionButton('restore-task', task.id, 'Restore', 'secondary-button');
+      actions += actionButton('edit', task.id, icon('edit'), 'icon-button', ' aria-label="Edit ' + escape(task.name) + '"');
     } else {
       if (!library && active && selected === today) actions += actionButton('finish', active.id, icon('stop') + '<span>Finish</span>');
       else if (!library && done) actions += '<span class="done-label">' + icon('check') + ' Done</span>';
@@ -275,8 +344,9 @@
     return items;
   }
   function dayMap(containerId, name, entries, due) {
-    var container = $(containerId), previous = container.querySelector('.day-scroll');
-    var scrollTop = previous && mapDates[name] === selected ? previous.scrollTop : null;
+    var container = $(containerId);
+    var position = mapPositions[name];
+    var scrollTop = position && position.date === selected ? position.top : null;
     var focused = container.contains(document.activeElement) ? document.activeElement : null;
     var focus = focused && (focused.dataset.entryId || focused.dataset.taskId || '');
     var focusDate = focused && focused.dataset.date, focusTime = focused && focused.dataset.time;
@@ -317,6 +387,7 @@
     if (scrollTop !== null) scroller.scrollTop = scrollTop;
     else scroller.scrollTop = Math.max(0, (selected === today ? T.minutesAt(new Date()) - 120 : positioned.length ? positioned[0].startMinute - 60 : 0));
     mapDates[name] = selected;
+    mapPositions[name] = { date: selected, top: scroller.scrollTop };
     if (focusTime) {
       var hourButton = container.querySelector('[data-time="' + focusTime + '"]');
       if (hourButton) hourButton.focus({ preventScroll: true });
@@ -328,8 +399,8 @@
   }
   function renderMaps() {
     var entries = M.entriesForDate(state, selected), due = M.tasksForDate(state, selected);
-    if (view === 'today') dayMap('timeline-list', 'today', entries, due);
-    if (view === 'history') dayMap('history-timeline', 'history', entries, due);
+    if (view === 'today' && todayPanel === 'timeline') dayMap('timeline-list', 'today', entries, due);
+    if (view === 'history' && $('calendar-day-details').open) dayMap('history-timeline', 'history', entries, due);
     $('history-map-date').textContent = dateLabel(selected, { month: 'long', day: 'numeric' });
     document.querySelectorAll('[data-action="jump-now"]').forEach(function (button) { button.hidden = selected !== today; });
     document.querySelectorAll('[data-action="jump-first"]').forEach(function (button) { button.disabled = !dayItems(entries, due).length; });
@@ -379,16 +450,44 @@
     }
     return due;
   }
+  function captureMapPosition(name) {
+    var scroller = $(name === 'today' ? 'timeline-list' : 'history-timeline').querySelector('.day-scroll');
+    if (scroller && scroller.getClientRects().length && mapDates[name]) mapPositions[name] = { date: mapDates[name], top: scroller.scrollTop };
+  }
+  function renderTodayPanel() {
+    captureMapPosition('today');
+    $('today-map-panel').hidden = todayPanel !== 'timeline';
+    $('daily-activities').hidden = todayPanel !== 'tasks';
+    document.querySelectorAll('[data-today-panel]').forEach(function (button) {
+      button.setAttribute('aria-pressed', String(button.dataset.todayPanel === todayPanel));
+    });
+  }
+  function renderLibrary() {
+    var query = $('library-search').value.trim().toLocaleLowerCase(), kind = $('library-kind').value;
+    var tasks = state.tasks.filter(function (task) {
+      return ($('show-archived').checked || !task.archivedAt) && (kind === 'all' || task.kind === kind) &&
+        (!query || [task.name, task.note || '', task.location || ''].join(' ').toLocaleLowerCase().includes(query));
+    });
+    $('library-results').textContent = tasks.length + (tasks.length === 1 ? ' activity' : ' activities');
+    var groups = [['routine', 'Routines'], ['planned', 'To-dos'], ['optional', 'Optional'], ['event', 'Events']];
+    $('library-list').innerHTML = groups.map(function (group) {
+      var items = tasks.filter(function (task) { return task.kind === group[0]; });
+      if (!items.length) return '';
+      return '<section class="library-group"><div class="section-heading"><h2>' + group[1] + ' <span class="section-count">' + items.length + '</span></h2>' + addButton(group[0], 'Add') + '</div>' + items.map(function (task) { return taskCard(task, true); }).join('') + '</section>';
+    }).join('') || empty(query ? 'No matching activities.' : 'Nothing here yet.', query ? 'Try another name or type.' : 'Add an activity to get started.', query ? '' : addButton(kind === 'all' ? 'routine' : kind, kind === 'event' ? 'Add event' : 'Add activity'));
+  }
   function render() {
+    captureMapPosition('today');
+    captureMapPosition('history');
     today = M.localDate();
     ['today', 'library', 'history'].forEach(function (name) { $(name + '-view').hidden = view !== name; });
     document.querySelectorAll('[data-view]').forEach(function (button) {
       button.classList.toggle('is-active', button.dataset.view === view);
       if (button.dataset.view === view) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
     });
-    $('day-navigation').hidden = view === 'library';
-    $('view-title').textContent = view === 'library' ? 'Activities' : view === 'history' ? 'Calendar' : selected === today ? 'Today, at a glance.' : selected > today ? 'A little planning ahead.' : 'A day to look back on.';
-    $('view-subtitle').textContent = view === 'library' ? 'Your events, routines, and things to do.' : dateLabel(selected) + (selected === today ? ' · Today' : selected === M.addDays(today, -1) ? ' · Yesterday' : '');
+    $('day-navigation').hidden = view !== 'today';
+    $('view-title').textContent = view === 'library' ? 'Activities' : view === 'history' ? 'Calendar' : selected === today ? 'Today' : selected === M.addDays(today, -1) ? 'Yesterday' : 'Your day';
+    $('view-subtitle').textContent = view === 'library' ? 'Manage your routines, to-dos, and events.' : dateLabel(selected);
     renderDays();
     renderActive();
     var due = dailyTasks(selected);
@@ -398,13 +497,16 @@
     var entries = M.entriesForDate(state, selected);
     $('day-summary').innerHTML = summary(entries, due);
     $('history-summary').innerHTML = summary(entries, due);
-    $('routine-count').textContent = String(routines.length).padStart(2, '0');
-    $('planned-count').textContent = String(planned.length).padStart(2, '0');
-    $('routine-list').innerHTML = routines.length ? routines.map(function (task) { return taskCard(task); }).join('') : empty('No routines yet.', 'Repeat the things you want to do.', addButton('routine', 'Create a routine'));
-    $('planned-list').innerHTML = planned.length ? planned.map(function (task) { return taskCard(task); }).join('') : empty('Nothing to do here yet.', 'Give a one-time task a date.', addButton('planned', 'Plan something'));
-    $('optional-list').innerHTML = optional.length ? optional.map(function (task) { return taskCard(task); }).join('') : empty('Room for something spontaneous.', 'Keep activities here for whenever you feel like it.', addButton('optional', 'Add an optional activity'));
+    $('routine-count').textContent = routines.length;
+    $('planned-count').textContent = planned.length;
+    $('today-task-count').textContent = due.filter(function (task) { return !(taskEntry(task, task.kind === 'planned' ? task.schedule.date : selected) || {}).endAt; }).length;
+    function taskEmpty(text, kind, label) { return '<div class="task-empty"><span>' + text + '</span>' + addButton(kind, label) + '</div>'; }
+    $('routine-list').innerHTML = routines.length ? routines.map(function (task) { return taskCard(task); }).join('') : taskEmpty('No routines for this day.', 'routine', 'Add routine');
+    $('planned-list').innerHTML = planned.length ? planned.map(function (task) { return taskCard(task); }).join('') : taskEmpty('No to-dos for this day.', 'planned', 'Add to-do');
+    $('optional-list').innerHTML = optional.length ? optional.map(function (task) { return taskCard(task); }).join('') : taskEmpty('Things to do anytime.', 'optional', 'Add activity');
     $('quick-log-form').hidden = selected !== today;
     $('timeline-date').textContent = selected === today ? 'TODAY’S TIMELINE' : dateLabel(selected, { month: 'short', day: 'numeric' }).toUpperCase();
+    renderTodayPanel();
     renderMaps();
     if (view === 'history') renderHistory();
     renderGlance();
@@ -412,13 +514,7 @@
     $('week-strip').hidden = view === 'history';
     renderCalendar();
     rememberView();
-    var libraryTasks = state.tasks.filter(function (task) { return $('show-archived').checked || !task.archivedAt; });
-    var library = '';
-    [['event', 'Events'], ['routine', 'Routines'], ['planned', 'Planned tasks'], ['optional', 'Optional activities']].forEach(function (group) {
-      var tasks = libraryTasks.filter(function (task) { return task.kind === group[0]; });
-      library += '<section class="library-group"><div class="section-heading"><h2>' + group[1] + '</h2>' + addButton(group[0], 'Add') + '</div>' + (tasks.length ? tasks.map(function (task) { return taskCard(task, true); }).join('') : empty('A space for your ' + group[1].toLowerCase() + '.', 'Start with one. You can always add more.')) + '</section>';
-    });
-    $('library-list').innerHTML = library;
+    renderLibrary();
   }
   function switchView(next) {
     view = next;
@@ -449,7 +545,7 @@
     taskOriginal = task ? clone(task) : null;
     $('task-form').reset();
     $('task-id').value = task ? task.id : '';
-    $('task-dialog-title').textContent = task ? 'A little adjustment.' : 'Make space for something.';
+    $('task-dialog-title').textContent = task ? 'Edit activity' : 'New activity';
     $('task-name').value = task ? task.name : '';
     $('task-color').value = itemColor(task);
     $('task-kind').value = task ? task.kind : kind || 'routine';
@@ -464,6 +560,7 @@
     document.querySelectorAll('[name="weekday"]').forEach(function (input) { input.checked = (schedule.weekdays || [1, 2, 3, 4, 5]).includes(Number(input.value)); });
     $('task-error').hidden = true;
     $('task-archive').hidden = !task || !!task.archivedAt;
+    $('task-delete').hidden = !task;
     updateForm();
     $('task-dialog').showModal();
     $('task-name').focus();
@@ -488,7 +585,7 @@
     var now = new Date(), date = selected > today ? today : selected;
     $('record-form').reset();
     $('record-id').value = entry ? entry.id : '';
-    $('record-dialog-title').textContent = entry ? 'A moment, remembered.' : 'Fill in the picture.';
+    $('record-dialog-title').textContent = entry ? 'Record details' : 'Log earlier';
     $('record-eyebrow').textContent = entry ? 'THE ACTUAL RECORD' : 'SOMETHING YOU DID EARLIER';
     $('record-title').value = entry ? entry.title : '';
     $('record-tracking').value = entry ? entry.tracking : 'check';
@@ -547,7 +644,7 @@
       scrollMap(button.dataset.map, first ? first.startMinute : 0); return;
     }
     if (action === 'visit-entry') {
-      selected = button.dataset.date; $('history-search').value = ''; render();
+      selected = button.dataset.date; $('history-search').value = ''; $('calendar-day-details').open = true; render();
       var entry = state.entries.find(function (item) { return item.id === id; });
       var segment = entry && T.segment(entry, selected);
       scrollMap('history', segment ? segment.startMinute : 0); return;
@@ -682,7 +779,7 @@
       }
       return id ? M.updateTask(draft, id, input) : M.createTask(draft, input);
     }, { onError: function (error) { saveMessage = error.message; } });
-    if (result) { $('task-dialog').close(); toast(id ? 'Activity updated.' : 'Activity added.'); }
+    if (result) { todayPanel = 'tasks'; renderTodayPanel(); renderGlance(); rememberView(); $('task-dialog').close(); toast(id ? 'Activity updated.' : 'Activity added.'); }
     else { $('task-error').textContent = saveMessage || 'The activity could not be saved. Check the storage message and try again.'; $('task-error').hidden = false; }
   });
   $('task-archive').addEventListener('click', function () {
@@ -692,6 +789,15 @@
       var result = transact(function (draft) { M.archiveTask(draft, id); });
       if (result) { $('task-dialog').close(); toast('Archived. Your history is kept.'); }
     });
+  });
+  $('task-delete').addEventListener('click', async function () {
+    if (await requestTaskDeletion($('task-id').value, JSON.stringify(taskOriginal))) $('task-dialog').close();
+  });
+  $('delete-task-cancel').addEventListener('click', function () { closeTaskDeletion(false); });
+  $('delete-task-dialog').addEventListener('cancel', function (event) { event.preventDefault(); closeTaskDeletion(false); });
+  $('delete-task-confirm').addEventListener('click', confirmTaskDeletion);
+  $('delete-task-records').addEventListener('change', function () {
+    $('delete-records-hint').textContent = this.checked ? 'These records and their times will be permanently deleted too.' : 'Your past records will stay on the timeline.';
   });
   $('record-tracking').addEventListener('change', recordFields);
   $('record-form').addEventListener('submit', function (event) {
@@ -731,7 +837,23 @@
     });
   });
   $('history-search').addEventListener('input', renderHistory);
+  document.querySelectorAll('[data-today-panel]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      todayPanel = button.dataset.todayPanel;
+      renderTodayPanel(); renderMaps(); renderGlance(); rememberView();
+    });
+  });
+  document.addEventListener('scroll', function (event) {
+    if (event.target.matches && event.target.matches('.day-scroll')) captureMapPosition(event.target.dataset.map);
+  }, true);
+  $('calendar-day-details').addEventListener('toggle', function () { renderMaps(); rememberView(); });
+  $('library-search').addEventListener('input', function () { renderLibrary(); rememberView(); });
+  $('library-kind').addEventListener('change', function () { renderLibrary(); rememberView(); });
   $('calendar-search').addEventListener('input', function () { renderCalendar(); rememberView(); });
+  $('calendar-date-picker').addEventListener('change', function () {
+    try { M.addDays(this.value, 0); selected = this.value; render(); }
+    catch (_) { this.value = selected; }
+  });
   document.querySelectorAll('[data-calendar-filter]').forEach(function (button) {
     button.addEventListener('click', function () { calendarFilter = button.dataset.calendarFilter; renderCalendar(); rememberView(); });
   });

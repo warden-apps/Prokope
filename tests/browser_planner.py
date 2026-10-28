@@ -42,6 +42,9 @@ class PlannerBrowserTests(unittest.TestCase):
         expect(self.page.locator("#add-event")).to_be_visible()
 
     def select_date(self, date):
+        if self.page.locator("#history-view").is_visible():
+            smoke.select_calendar_date(self.page, date)
+            return
         self.page.locator("#date-picker").fill(date)
         self.page.locator("#date-picker").dispatch_event("change")
         expect(self.page.locator("#date-picker")).to_have_value(date)
@@ -89,6 +92,10 @@ class PlannerBrowserTests(unittest.TestCase):
         return matches[0]
 
     def event_on_map(self, event, history=False):
+        if history:
+            smoke.open_calendar_details(self.page)
+        else:
+            smoke.show_today_panel(self.page, "timeline")
         container = "#history-timeline" if history else "#timeline-list"
         return self.page.locator(f'{container} [data-action="edit-event"][data-id="{event["id"]}"]')
 
@@ -107,6 +114,7 @@ class PlannerBrowserTests(unittest.TestCase):
         expect(self.page.locator("#event-dialog")).to_be_visible()
         self.assertEqual(self.page.locator('#event-dialog [data-action="complete"], #event-dialog [data-action="start"]').count(), 0)
         self.page.locator("#event-close").click()
+        smoke.show_today_panel(self.page, "tasks")
         self.page.locator(f'[data-action="complete"][data-id="{routine["id"]}"]').click()
         expect(self.page.locator("#day-summary .summary-value").first).to_have_text("1 / 1")
         self.assertEqual(len(self.state()["entries"]), 1)
@@ -198,6 +206,7 @@ class PlannerBrowserTests(unittest.TestCase):
         self.page.locator("#task-color").fill("#bc754d")
         self.page.locator('#task-form button[type="submit"]').click()
         self.assertEqual(self.state()["entries"][0]["color"], "#447b9b")
+        smoke.show_today_panel(self.page, "timeline")
         self.page.locator(f'#timeline-list [data-entry-id="{entry["id"]}"]').click()
         self.page.locator("#record-color").fill("#8067a3")
         self.page.locator("#record-save").click()

@@ -161,10 +161,12 @@ class ThemeBrowserTests(unittest.TestCase):
         for theme in ["dark", "light"]:
             self.choose_theme(theme)
             self.assert_readable("#quick-log-form label")
+            smoke.show_today_panel(self.page, "tasks")
             self.assert_readable("#routine-list .task-name")
             self.assert_readable("#routine-list .task-meta")
             self.assert_readable("#active-timers strong")
             self.assert_readable("#active-timers .action-button")
+            smoke.show_today_panel(self.page, "timeline")
             self.assert_readable("#today-map-panel .day-map-footer")
             self.page.locator('#timeline-list .day-scroll').evaluate('el => el.scrollTop = 700')
             self.assert_readable('#timeline-list .map-event.is-event .event-title')

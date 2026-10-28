@@ -1,0 +1,139 @@
+/* Focused daily views: one workspace at a time, with logging always close. */
+.main { max-width:1440px; }
+.page-header { margin-bottom:22px; }
+.page-header h1 { margin-top:0; font-size:40px; letter-spacing:-1.2px; }
+.page-subtitle { margin-top:7px; }
+.sidebar-note { display:none; }
+.sidebar-footer { margin-top:auto; }
+.day-navigation { margin-bottom:18px; }
+.date-toolbar { margin-bottom:8px; }
+.week-strip { padding:4px; gap:4px; }
+.week-day { min-height:62px; padding:5px 2px; gap:1px; }
+.week-number { font-size:23px; }
+.quick-log-form { margin-bottom:16px; padding:13px 16px; }
+.quick-log-fields { margin-top:5px; }
+.quick-log-form > label { font-size:12px; }
+.quick-log-icon { width:19px; height:19px; }
+.day-view-switch { justify-content:space-between; gap:16px; padding-bottom:16px; }
+.view-segments { display:flex; gap:3px; padding:4px; background:var(--sage-light); border:1px solid var(--line); border-radius:10px; }
+.view-segments button { display:flex; justify-content:center; align-items:center; gap:8px; min-height:44px; min-width:110px; padding:9px 17px; border-radius:7px; color:var(--muted); font-size:13px; font-weight:500; }
+.view-segments button[aria-pressed="true"] { background:var(--surface); color:var(--ink); box-shadow:0 1px 4px #20302c14; font-weight:600; }
+.day-view-switch .view-segments button:last-child { margin-left:0; color:var(--muted); }
+.day-view-switch .view-segments button[aria-pressed="true"] { color:var(--ink); }
+.segment-count { display:inline-flex; justify-content:center; min-width:19px; padding:1px 5px; border-radius:5px; background:var(--sage); color:var(--sage-ink); font-size:11px; }
+.dashboard-grid { display:block; }
+.day-main { width:100%; }
+.day-main .task-section { margin-top:24px; }
+.section-heading h2 { font-size:23px; }
+.section-symbol { display:none; }
+.task-empty { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--line); color:var(--muted); font-size:12px; }
+.task-empty .text-button { flex-shrink:0; color:var(--sage-ink); }
+.day-summary { gap:12px; margin-bottom:18px; padding:12px 0; border-bottom:1px solid var(--line); }
+.summary-card { gap:8px; }
+.summary-value { font-size:23px; }
+.day-map-heading { padding:14px 18px 8px; }
+.day-map-heading h2 { font-size:24px; }
+.day-map-heading .section-kicker { display:none; }
+.day-map-tools { flex-direction:row; }
+.day-scroll { height:500px; max-height:65svh; }
+.schedule-glance { margin:0 0 16px; }
+.schedule-glance-item { min-height:64px; padding:10px 13px; }
+.main-footer { margin-top:32px; padding-top:16px; color:var(--muted); }
+
+/* A small library toolbar replaces four large empty-category panels. */
+.library-controls { display:flex; flex-wrap:wrap; gap:10px; }
+.library-search { flex:1; min-width:140px; }
+.library-type { width:160px; }
+.library-controls input, .library-controls select { width:100%; min-height:48px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font-size:16px; }
+.library-controls select { appearance:auto; -webkit-appearance:menulist; }
+.library-controls input::placeholder { color:var(--muted); }
+.library-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:8px 0 20px; font-size:12px; color:var(--muted); }
+.library-group + .library-group { margin-top:16px; }
+.library-group .section-heading { margin-bottom:8px; }
+.library-list .task-card { min-height:76px; padding:13px 15px; margin-bottom:7px; }
+.library-list .empty-state { padding:30px 20px; }
+.library-list .task-actions { flex-wrap:wrap; justify-content:flex-end; }
+
+/* Calendar starts with the month and agenda; deep review is one tap away. */
+.calendar-controls { display:grid; grid-template-columns:auto minmax(140px, 1fr) 165px; align-items:end; }
+.calendar-search { min-width:0; max-width:none; }
+.calendar-date-jump { display:flex; flex-direction:column; gap:5px; min-width:0; font-size:11px; color:var(--muted); }
+.calendar-date-jump input { width:100%; min-height:48px; padding:9px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font-size:16px; }
+.calendar-day-heading { margin-top:18px; margin-bottom:8px; }
+.calendar-day-heading h2 { font-size:23px; }
+.day-details { border-top:1px solid var(--line); }
+.day-details > summary { min-height:52px; padding:14px 0; cursor:pointer; color:var(--sage-ink); font-size:13px; font-weight:600; }
+.day-details > summary:focus-visible { outline:2px solid var(--sage-ink); outline-offset:3px; }
+.day-details .history-layout { padding-top:0; gap:22px; }
+.day-details .history-records-panel { align-self:start; }
+
+/* Permanent removal stays distinct from the reversible Archive action. */
+.editor-secondary-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px 18px; }
+.editor-secondary-actions .text-button { min-height:44px; }
+.modal-footer { flex-wrap:wrap; gap:12px; }
+.modal-header .eyebrow { display:none; }
+.danger-button { background:var(--danger); border-color:var(--danger); color:var(--surface); }
+.danger-button:hover { filter:brightness(.92); }
+html[data-theme="dark"] .danger-button { color:#30251f; }
+.delete-records-choice { display:flex; align-items:center; gap:10px; min-height:48px; margin-top:16px; padding:12px; border:1px solid var(--line); border-radius:8px; font-size:13px; cursor:pointer; }
+.delete-records-choice input { flex:0 0 auto; width:18px; height:18px; }
+.delete-records-hint { color:var(--muted); font-size:12px; line-height:1.6; margin-top:10px; }
+
+@media (min-width:1000px) {
+  .quick-log-form { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:24px; }
+  .quick-log-fields { margin-top:0; }
+  .day-main { max-width:850px; }
+}
+@media (max-width:760px) {
+  .sidebar { padding-top:calc(15px + env(safe-area-inset-top, 0px)); padding-bottom:8px; }
+  .sidebar-footer { margin:0; }
+  .main { padding-top:12px; }
+  .page-header { margin-bottom:12px; gap:10px; }
+  .page-header h1 { font-size:34px; }
+  .page-subtitle { font-size:12px; margin-top:5px; }
+  .header-actions { margin-top:0; }
+  .live-clock-value { font-size:21px; letter-spacing:-.5px; }
+  .live-clock-caption { display:none; }
+  .week-day { min-height:58px; }
+  .week-number { font-size:21px; }
+  .day-navigation { margin-bottom:14px; }
+  .date-toolbar { flex-wrap:nowrap; }
+  .date-switcher { gap:0; }
+  .today-button { margin:0; }
+  .today-button .icon { display:none; }
+  .day-view-switch { flex-wrap:nowrap; gap:8px; padding-bottom:14px; }
+  .view-segments { flex:1; max-width:290px; }
+  .view-segments button { min-width:0; flex:1; padding:8px 13px; font-size:12px; }
+  .day-view-switch > .text-button { font-size:11px; flex-shrink:0; }
+  .day-map-heading { padding:12px 14px 6px; align-items:center; }
+  .day-map-heading h2 { font-size:23px; }
+  .day-map-tools { flex-direction:row; }
+  .day-scroll { height:420px; }
+  .day-main .task-section { margin-top:22px; }
+  .day-main .task-card, .library-list .task-card { flex-wrap:nowrap; }
+  .day-main .task-card .task-content, .library-list .task-card .task-content { flex-basis:0; }
+  .task-empty { font-size:11px; }
+  .day-summary { gap:8px; }
+  .summary-card { min-width:0; padding-right:8px; flex-direction:column; gap:4px; }
+  .summary-value { font-size:23px; }
+  .library-type { width:125px; }
+  .library-controls input, .library-controls select { padding:9px 10px; }
+  .library-toolbar { margin-bottom:12px; }
+  .calendar-controls { grid-template-columns:minmax(0,1fr) 155px; }
+  .calendar-filters { grid-column:1 / -1; }
+  .calendar-search { width:auto; }
+  .library-list .task-card { gap:10px; }
+  .editor-secondary-actions { width:100%; justify-content:space-between; }
+  .modal-footer > .primary-button { margin-left:auto; }
+}
+@media (min-width:761px) and (max-width:1100px) {
+  .calendar-controls { grid-template-columns:minmax(0,1fr) 165px; }
+  .calendar-filters { grid-column:1 / -1; justify-self:start; }
+}
+@media (max-width:360px) {
+  .day-main .task-icon { display:none; }
+  .library-search { flex-basis:100%; }
+  .library-type { width:100%; }
+  .view-segments button { padding:8px; }
+  .task-empty { align-items:flex-start; flex-direction:column; gap:0; }
+}
